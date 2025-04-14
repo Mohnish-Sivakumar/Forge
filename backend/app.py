@@ -7,11 +7,12 @@ import numpy as np
 import io
 import logging
 import soundfile as sf
-import queue
-import threading
 
 app = Flask(__name__)
-CORS(app)
+
+# Allow CORS for your GitHub Pages domain
+CORS(app, resources={r"/api/*": {"origins": "https://mohnish-sivakumar.github.io"}})
+
 logging.basicConfig(level=logging.DEBUG)
 
 # Initialize services
