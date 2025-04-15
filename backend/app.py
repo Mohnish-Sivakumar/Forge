@@ -17,7 +17,7 @@ CORS(app, resources={r"/api/*": {"origins": "https://mohnish-sivakumar.github.io
 logging.basicConfig(level=logging.DEBUG)
 
 # Initialize services
-genai.configure(api_key="AIzaSyDrxMRoQ-Knm7gM_6YNHAiPhXoC6HN09S4")
+genai.configure(api_key=os.environ.get("GOOGLE_GENAI_API_KEY"))
 model = genai.GenerativeModel('gemini-1.5-flash')
 pipeline = KPipeline(lang_code='a')  # Only supports basic initialization
 
@@ -79,5 +79,6 @@ def voice_assistant():
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
+    # Ensure the app uses the PORT environment variable
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)

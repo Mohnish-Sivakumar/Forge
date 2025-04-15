@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: my-voice-assistant
+    env: python
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "gunicorn backend.app:app"
+    pythonVersion: 3.12.9
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.9
+      - key: GOOGLE_GENAI_API_KEY
+        value: "AIzaSyDrxMRoQ-Knm7gM_6YNHAiPhXoC6HN09S4"  # Replace with your actual API key
+      - key: PORT
+        value: "5000"  # Ensure this matches the port your service expects 
