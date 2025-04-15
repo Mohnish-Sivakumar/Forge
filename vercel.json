@@ -25,20 +25,8 @@
     }
   ],
   "routes": [
-    {
-      "src": "/api/(.*)",
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "/manifest.json",
-      "dest": "/my-voice-assistant/build/manifest.json"
-    },
-    {
-      "handle": "filesystem"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/my-voice-assistant/build/index.html"
-    }
+    { "src": "/api/(.*)", "dest": "/api/index.py" },
+    { "handle": "filesystem" },
+    { "src": "/(.*)", "dest": "/my-voice-assistant/build/index.html" }
   ]
 } 
