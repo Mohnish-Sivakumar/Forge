@@ -1,5 +1,7 @@
 from http.server import BaseHTTPRequestHandler
 import json
+import os
+import urllib.parse
 
 class handler(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
@@ -19,25 +21,32 @@ class handler(BaseHTTPRequestHandler):
         self.send_header('Access-Control-Allow-Origin', '*')
         self.end_headers()
         
+        # For debugging purposes
         response = {
             "status": "ok",
             "message": "Interview AI API is running",
-            "path": self.path
+            "path": self.path,
+            "environ": dict(os.environ),
+            "headers": dict(self.headers)
         }
         
         self.wfile.write(json.dumps(response).encode())
         return
 
     def do_POST(self):
-        # Handle POST requests for different paths
+        # Parse the path to handle different endpoints
+        parsed_path = urllib.parse.urlparse(self.path)
+        path = parsed_path.path
+        
+        # Get POST data
         content_length = int(self.headers.get('Content-Length', 0))
         if content_length > 0:
             post_data = self.rfile.read(content_length)
             try:
                 request_data = json.loads(post_data)
                 user_text = request_data.get('text', '')
-            except:
-                user_text = "No valid JSON data provided"
+            except Exception as e:
+                user_text = f"Error parsing JSON: {str(e)}"
         else:
             user_text = "No data provided"
         
@@ -46,18 +55,31 @@ class handler(BaseHTTPRequestHandler):
         self.send_header('Access-Control-Allow-Origin', '*')
         self.end_headers()
         
-        # Check which endpoint was accessed
-        if self.path == '/api/text' or self.path.startswith('/api/text?'):
+        # Debug information
+        debug_info = {
+            "received_path": self.path,
+            "parsed_path": path,
+            "method": self.command,
+            "headers": dict(self.headers),
+            "content_length": content_length,
+            "user_text": user_text
+        }
+        
+        # Check which endpoint was accessed - handling various path formats
+        if path == '/api/text' or path.startswith('/api/text/'):
             response = {
-                "response": f"This is a test response from the API for input: {user_text}. Actual AI integration will be added after deployment works."
+                "response": f"This is a test response from the API for input: {user_text}. Actual AI integration will be added after deployment works.",
+                "debug": debug_info
             }
-        elif self.path == '/api/voice' or self.path.startswith('/api/voice?'):
+        elif path == '/api/voice' or path.startswith('/api/voice/'):
             response = {
-                "response": f"This is a voice response from the API for input: {user_text}. Voice functionality will be added later."
+                "response": f"This is a voice response from the API for input: {user_text}. Voice functionality will be added later.",
+                "debug": debug_info
             }
         else:
             response = {
-                "response": f"Unknown endpoint: {self.path}"
+                "response": f"Unknown endpoint: {path}",
+                "debug": debug_info
             }
         
         self.wfile.write(json.dumps(response).encode()) 

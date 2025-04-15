@@ -87,11 +87,15 @@ function App() {
     // Stop any ongoing audio playback
     stopAudioPlayback();
     
+    // Get current domain to handle different deployments
+    const apiBase = window.location.origin;
+    
     try {
       console.log('Sending request to API with text:', text);
+      console.log('Using API URL:', `${apiBase}/api/text`);
       
       // First get text response for immediate feedback
-      const textResponse = await fetch('/api/text', {
+      const textResponse = await fetch(`${apiBase}/api/text`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -121,7 +125,8 @@ function App() {
         // Try to get error message from response if possible
         try {
           const errorData = await textResponse.json();
-          setError(`API Error: ${errorData.error || 'Unknown error'}`);
+          console.log('Error response:', errorData);
+          setError(`API Error (${textResponse.status}): ${errorData.response || 'Unknown error'}`);
         } catch {
           setError(`API Error: The server returned status ${textResponse.status}`);
         }
