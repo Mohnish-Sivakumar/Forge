@@ -3,7 +3,7 @@ services:
     name: my-voice-assistant
     env: python
     buildCommand: "pip install -r requirements.txt"
-    startCommand: "gunicorn backend.app:app"
+    startCommand: "gunicorn backend.main:app"
     pythonVersion: 3.12.9
     envVars:
       - key: PYTHON_VERSION

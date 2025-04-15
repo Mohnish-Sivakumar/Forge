@@ -19,7 +19,7 @@
     "predeploy": "npm run build",
     "deploy": "NODE_OPTIONS=--openssl-legacy-provider gh-pages -d build",
     "start-react": "react-scripts start",
-    "start-backend": "cd ../backend && python app.py",
+    "start-backend": "cd ../backend && gunicorn main:app",
     "build": "react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
