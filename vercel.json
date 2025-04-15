@@ -14,25 +14,20 @@
     }
   ],
   "routes": [
-    { 
-      "src": "/api/(.*)", 
-      "dest": "/api/index.py"
+    {
+      "src": "/api/(.*)",
+      "dest": "/api/index.py",
+      "headers": {
+        "Access-Control-Allow-Credentials": "true",
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+        "Access-Control-Allow-Headers": "X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization"
+      }
     },
     { "src": "/manifest.json", "dest": "/my-voice-assistant/build/manifest.json" },
     { "src": "/static/(.*)", "dest": "/my-voice-assistant/build/static/$1" },
     { "src": "/favicon.ico", "dest": "/my-voice-assistant/build/favicon.ico" },
     { "handle": "filesystem" },
     { "src": "/(.*)", "dest": "/my-voice-assistant/build/index.html" }
-  ],
-  "headers": [
-    {
-      "source": "/api/(.*)",
-      "headers": [
-        { "key": "Access-Control-Allow-Credentials", "value": "true" },
-        { "key": "Access-Control-Allow-Origin", "value": "*" },
-        { "key": "Access-Control-Allow-Methods", "value": "GET, POST, OPTIONS" },
-        { "key": "Access-Control-Allow-Headers", "value": "X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization" }
-      ]
-    }
   ]
 } 
