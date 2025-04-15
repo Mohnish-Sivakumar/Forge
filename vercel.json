@@ -3,10 +3,7 @@
     "builds": [
       {
         "src": "api/index.py",
-        "use": "@vercel/python",
-        "config": {
-          "maxLambdaSize": "50mb"
-        }
+        "use": "@vercel/python"
       },
       {
         "src": "my-voice-assistant/package.json",
@@ -17,67 +14,8 @@
       }
     ],
     "routes": [
-      {
-        "src": "/api/(.*)",
-        "methods": ["OPTIONS"],
-        "dest": "api/index.py"
-      },
-      {
-        "src": "/api/(.*)",
-        "dest": "api/index.py",
-        "headers": {
-          "Access-Control-Allow-Origin": "*",
-          "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-          "Access-Control-Allow-Headers": "Content-Type, Authorization, Accept, X-Response-Text",
-          "Access-Control-Allow-Credentials": "true",
-          "Access-Control-Expose-Headers": "X-Response-Text",
-          "Cache-Control": "no-cache, no-store, must-revalidate"
-        }
-      },
-      {
-        "src": "/static/(.*)",
-        "dest": "/my-voice-assistant/build/static/$1",
-        "headers": {
-          "Cache-Control": "public, max-age=31536000, immutable"
-        }
-      },
-      {
-        "src": "/manifest.json",
-        "dest": "/my-voice-assistant/build/manifest.json",
-        "headers": {
-          "Cache-Control": "public, max-age=0, must-revalidate",
-          "Content-Type": "application/json"
-        }
-      },
-      {
-        "src": "/favicon.ico",
-        "dest": "/my-voice-assistant/build/favicon.ico",
-        "headers": {
-          "Cache-Control": "public, max-age=31536000, immutable"
-        }
-      },
-      {
-        "src": "/(.*\\.(json|js|css|png|jpg|svg|ico|txt))",
-        "dest": "/my-voice-assistant/build/$1",
-        "headers": {
-          "Cache-Control": "public, max-age=31536000, immutable"
-        }
-      },
-      {
-        "handle": "filesystem"
-      },
-      {
-        "src": "/(.*)",
-        "dest": "/my-voice-assistant/build/index.html",
-        "headers": {
-          "Cache-Control": "public, max-age=0, must-revalidate"
-        }
-      }
-    ],
-    "functions": {
-      "api/index.py": {
-        "memory": 1024,
-        "maxDuration": 60
-      }
-    }
+      { "src": "/api/(.*)", "dest": "/api/index.py" },
+      { "handle": "filesystem" },
+      { "src": "/(.*)", "dest": "/my-voice-assistant/build/index.html" }
+    ]
   } 
