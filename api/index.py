@@ -12,7 +12,7 @@ import os
 app = Flask(__name__)
 
 # Allow CORS for all origins
-CORS(app, resources={r"/api/*": {"origins": "*"}})
+CORS(app)
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -47,13 +47,20 @@ def generate_speech_chunks(text):
 def home():
     return "Welcome to the Voice Assistant API!"
 
-@app.route('/api/voice', methods=['POST'])
+@app.route('/voice', methods=['POST'])
 def voice_assistant():
     try:
+        logging.info("Voice assistant endpoint called")
         data = request.json
+        if not data:
+            logging.error("No JSON data received")
+            return jsonify({'error': 'No JSON data received'}), 400
+            
         user_input = data.get('text', '')
+        logging.info(f"Received user input: {user_input}")
         
         if not user_input:
+            logging.error("No input text provided")
             return jsonify({'error': 'No input text provided'}), 400
             
         prompt = f"""

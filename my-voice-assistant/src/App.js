@@ -64,6 +64,8 @@ function App() {
     setSpeaking(true);
     try {
       // Using absolute path to ensure it works in all environments
+      // Changed from '/api/voice' to '/api/voice' to match Vercel routing + Flask app routes
+      console.log('Sending request to API with text:', text);
       const response = await fetch('/api/voice', {
         method: 'POST',
         headers: {
@@ -72,6 +74,8 @@ function App() {
         body: JSON.stringify({ text }),
       });
 
+      console.log('Response status:', response.status);
+      
       if (!response.ok) {
         throw new Error(`Network response was not ok: ${response.status} ${response.statusText}`);
       }

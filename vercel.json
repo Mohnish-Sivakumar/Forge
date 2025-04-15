@@ -14,8 +14,8 @@
     }
   ],
   "routes": [
-    { "src": "/api/(.*)", "dest": "api/index.py" },
+    { "src": "/api/(.*)", "dest": "/api/$1" },
     { "handle": "filesystem" },
-    { "src": "/(.*)$", "dest": "/my-voice-assistant/build/index.html" }
+    { "src": "/(.*)", "dest": "/my-voice-assistant/build/index.html" }
   ]
 } 
