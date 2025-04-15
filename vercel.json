@@ -45,7 +45,8 @@
         "src": "/manifest.json",
         "dest": "/my-voice-assistant/build/manifest.json",
         "headers": {
-          "Cache-Control": "public, max-age=0, must-revalidate"
+          "Cache-Control": "public, max-age=0, must-revalidate",
+          "Content-Type": "application/json"
         }
       },
       {
