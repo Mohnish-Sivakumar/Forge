@@ -107,6 +107,10 @@ function App() {
         
         if (jsonData.response) {
           setAiResponse(jsonData.response);
+        } else if (jsonData.error) {
+          console.error('Error from API:', jsonData.error);
+          setAiResponse(`Error: ${jsonData.error}`);
+          setError(`API Error: ${jsonData.error}`);
         } else {
           console.error('No response field in JSON data');
           setAiResponse('Error: Could not retrieve response from API');
@@ -114,145 +118,37 @@ function App() {
         }
       } else {
         console.error(`Failed to get text response: ${textResponse.status}`);
+        // Try to get error message from response if possible
+        try {
+          const errorData = await textResponse.json();
+          setError(`API Error: ${errorData.error || 'Unknown error'}`);
+        } catch {
+          setError(`API Error: The server returned status ${textResponse.status}`);
+        }
         setAiResponse(`Error: Failed to get response from API (Status ${textResponse.status})`);
-        setError(`API Error: The server returned status ${textResponse.status}`);
         setSpeaking(false);
         setIsWaiting(false);
         return;
       }
       
-      // Then get voice response to play audio
-      console.log('Fetching voice response...');
-      const audioResponse = await fetch('/api/voice', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'audio/wav'
-        },
-        body: JSON.stringify({ text })
-      });
-      
-      console.log('Voice response status:', audioResponse.status);
-      
-      if (audioResponse.ok) {
-        // Get the text response from headers if available
-        const headerText = audioResponse.headers.get('X-Response-Text');
-        if (headerText && headerText !== aiResponse) {
-          setAiResponse(headerText);
-          console.log('Updated response from headers:', headerText);
-        }
-      
-        // Process the audio stream
-        try {
-          const reader = audioResponse.body.getReader();
-          const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-          
-          let audioChunks = [];
-          let totalLength = 0;
-          
-          console.log('Reading audio stream...');
-          while (true) {
-            const {done, value} = await reader.read();
-            if (done) break;
-            
-            if (value) {
-              audioChunks.push(value);
-              totalLength += value.length;
-            }
-          }
-          
-          console.log(`Received ${totalLength} bytes of audio data`);
-          
-          if (totalLength > 0) {
-            // Combine all chunks into a single array
-            const combinedChunks = new Uint8Array(totalLength);
-            let offset = 0;
-            
-            for (const chunk of audioChunks) {
-              combinedChunks.set(chunk, offset);
-              offset += chunk.length;
-            }
-            
-            console.log('Decoding audio data...');
-            
-            // Decode and play the audio
-            audioContext.decodeAudioData(combinedChunks.buffer, (buffer) => {
-              console.log('Audio decoded successfully, starting playback');
-              const source = audioContext.createBufferSource();
-              source.buffer = buffer;
-              source.connect(audioContext.destination);
-              
-              // Save reference to stop if needed
-              audioSourceRef.current = source;
-              
-              // Handle playback completion
-              source.onended = () => {
-                console.log('Audio playback completed');
-                setSpeaking(false);
-                audioSourceRef.current = null;
-              };
-              
-              // Start playback
-              source.start(0);
-              console.log('Audio playback started');
-            }, (error) => {
-              console.error('Error decoding audio:', error);
-              setSpeaking(false);
-              setError(`Error decoding audio: ${error.message}`);
-              
-              // Fallback to browser's speech synthesis
-              if ('speechSynthesis' in window) {
-                console.log('Falling back to browser speech synthesis');
-                const utterance = new SpeechSynthesisUtterance(aiResponse);
-                utterance.onend = () => setSpeaking(false);
-                window.speechSynthesis.speak(utterance);
-              }
-            });
-          } else {
-            console.error('No audio data received');
-            setSpeaking(false);
-            setError('No audio data received from server');
-            
-            // Fallback to browser's speech synthesis
-            if ('speechSynthesis' in window) {
-              console.log('Falling back to browser speech synthesis');
-              const utterance = new SpeechSynthesisUtterance(aiResponse);
-              utterance.onend = () => setSpeaking(false);
-              window.speechSynthesis.speak(utterance);
-            }
-          }
-        } catch (audioError) {
-          console.error('Error processing audio:', audioError);
-          setSpeaking(false);
-          setError(`Error processing audio: ${audioError.message}`);
-          
-          // Fallback to browser's speech synthesis
-          if ('speechSynthesis' in window) {
-            console.log('Falling back to browser speech synthesis due to error');
-            const utterance = new SpeechSynthesisUtterance(aiResponse);
-            utterance.onend = () => setSpeaking(false);
-            window.speechSynthesis.speak(utterance);
-          }
-        }
+      // For now, skip voice response since we've changed the API structure
+      // Just use the text response and browser's speech synthesis
+      if ('speechSynthesis' in window && aiResponse) {
+        const utterance = new SpeechSynthesisUtterance(aiResponse);
+        utterance.onend = () => setSpeaking(false);
+        window.speechSynthesis.speak(utterance);
       } else {
-        console.error(`Failed to get audio response: ${audioResponse.status}`);
         setSpeaking(false);
-        setError(`Audio API Error: ${audioResponse.status}`);
-        
-        // Fallback to browser's speech synthesis
-        if ('speechSynthesis' in window) {
-          console.log('Falling back to browser speech synthesis due to failed request');
-          const utterance = new SpeechSynthesisUtterance(aiResponse);
-          utterance.onend = () => setSpeaking(false);
-          window.speechSynthesis.speak(utterance);
-        }
       }
       
+      // Mark as no longer waiting
+      setIsWaiting(false);
     } catch (error) {
       console.error('Error in fetch operation:', error);
       setSpeaking(false);
       setError(`Network error: ${error.message}`);
       setAiResponse(prevResponse => prevResponse || 'Error: ' + error.message);
+      setIsWaiting(false);
       
       // Fallback to browser's speech synthesis in case of error
       if ('speechSynthesis' in window && aiResponse) {
@@ -260,8 +156,6 @@ function App() {
         utterance.onend = () => setSpeaking(false);
         window.speechSynthesis.speak(utterance);
       }
-    } finally {
-      setIsWaiting(false);
     }
   };
 
