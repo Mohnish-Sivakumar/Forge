@@ -60,15 +60,8 @@ function App() {
   };
 
   const fetchResponse = async (text) => {
-    if (!text.trim()) {
-      console.warn('Empty text, not sending request');
-      return;
-    }
-
     try {
-      setIsWaiting(true);
-      setSpeaking(true);
-      const response = await fetch('http://127.0.0.1:5000/api/voice', {
+      const response = await fetch('/api/voice', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

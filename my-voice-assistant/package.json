@@ -1,5 +1,4 @@
 {
-  "homepage":  "https://mohnish-sivakumar.github.io/Forge/",
   "name": "my-voice-assistant",
   "version": "1.0.0",
   "private": true,
@@ -15,11 +14,7 @@
     "concurrently": "^6.0.0"
   },
   "scripts": {
-    "start": "concurrently \"npm run start-react\" \"npm run start-backend\"",
-    "predeploy": "npm run build",
-    "deploy": "NODE_OPTIONS=--openssl-legacy-provider gh-pages -d build",
-    "start-react": "react-scripts start",
-    "start-backend": "cd ../backend && gunicorn main:app",
+    "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject"

@@ -1,4 +1,9 @@
 {
+  "name": "forge",
+  "private": true,
+  "scripts": {
+    "build": "cd my-voice-assistant && npm install && npm run build"
+  },
   "dependencies": {
     "create-react-app": "^5.1.0"
   },
