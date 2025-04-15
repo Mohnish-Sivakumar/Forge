@@ -4,8 +4,8 @@ import './App.css';
 function App() {
   const [listening, setListening] = useState(false);
   const [speaking, setSpeaking] = useState(false);
-  const [response, setResponse] = useState('');
   const [isWaiting, setIsWaiting] = useState(false);
+  const [aiResponse, setAiResponse] = useState(''); // Store AI's text response
   const recognitionRef = useRef(null);
   const speechResultRef = useRef(''); // Store the speech result
 
@@ -24,6 +24,7 @@ function App() {
 
       recognition.onstart = () => {
         console.log('Speech recognition started');
+        setAiResponse(''); // Clear previous response
       };
 
       recognition.onresult = (event) => {
@@ -62,64 +63,99 @@ function App() {
   const fetchResponse = async (text) => {
     setIsWaiting(true);
     setSpeaking(true);
+    
     try {
-      // Using absolute path to ensure it works in all environments
-      // Changed from '/api/voice' to '/api/voice' to match Vercel routing + Flask app routes
       console.log('Sending request to API with text:', text);
-      const response = await fetch('/api/voice', {
+      
+      // First get text response
+      const textResponse = await fetch('/api/text', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ text }),
       });
-
-      console.log('Response status:', response.status);
       
-      if (!response.ok) {
-        throw new Error(`Network response was not ok: ${response.status} ${response.statusText}`);
-      }
-
-      const reader = response.body.getReader();
-      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      console.log('Text response status:', textResponse.status);
       
-      let audioChunks = [];
-      let totalLength = 0;
-
-      while (true) {
-        const {done, value} = await reader.read();
-        if (done) break;
+      if (textResponse.ok) {
+        const jsonData = await textResponse.json();
+        console.log('Text response data:', jsonData);
         
-        console.log('Audio chunk received:', value);
-        audioChunks.push(value);
-        totalLength += value.length;
-      }
-
-      if (totalLength > 0) {
-        const combinedChunks = new Uint8Array(totalLength);
-        let offset = 0;
-        for (const chunk of audioChunks) {
-          combinedChunks.set(chunk, offset);
-          offset += chunk.length;
+        if (jsonData.response) {
+          setAiResponse(jsonData.response);
+        } else {
+          console.error('No response field in JSON data');
+          setAiResponse('Error: Could not retrieve response from API');
         }
-
-        const audioBuffer = await audioContext.decodeAudioData(combinedChunks.buffer);
-        const source = audioContext.createBufferSource();
-        source.buffer = audioBuffer;
-        source.connect(audioContext.destination);
-        source.onended = () => {
-          setSpeaking(false);
-        };
-        source.start(0);
       } else {
-        console.error('No audio data received');
+        console.error('Failed to get text response');
+        setAiResponse('Error: Failed to get response from API');
+      }
+      
+      // Then get audio response
+      const audioResponse = await fetch('/api/voice', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ text }),
+      });
+      
+      if (audioResponse.ok) {
+        try {
+          const reader = audioResponse.body.getReader();
+          const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+          
+          let audioChunks = [];
+          let totalLength = 0;
+          
+          while (true) {
+            const {done, value} = await reader.read();
+            if (done) break;
+            
+            if (value) {
+              audioChunks.push(value);
+              totalLength += value.length;
+            }
+          }
+          
+          if (totalLength > 0) {
+            console.log(`Processing ${totalLength} bytes of audio data`);
+            const combinedChunks = new Uint8Array(totalLength);
+            let offset = 0;
+            
+            for (const chunk of audioChunks) {
+              combinedChunks.set(chunk, offset);
+              offset += chunk.length;
+            }
+            
+            const audioBuffer = await audioContext.decodeAudioData(combinedChunks.buffer);
+            const source = audioContext.createBufferSource();
+            source.buffer = audioBuffer;
+            source.connect(audioContext.destination);
+            source.onended = () => {
+              setSpeaking(false);
+            };
+            source.start(0);
+            console.log('Audio playback started');
+          } else {
+            console.error('No audio data received');
+            setSpeaking(false);
+          }
+        } catch (audioError) {
+          console.error('Error processing audio:', audioError);
+          setSpeaking(false);
+        }
+      } else {
+        console.error('Failed to get audio response:', audioResponse.status);
         setSpeaking(false);
       }
-
+      
     } catch (error) {
-      console.error('Error:', error);
+      console.error('Error in fetch operation:', error);
       setSpeaking(false);
-      alert('Error connecting to the voice API. Please try again.');
+      setAiResponse(aiResponse => aiResponse || 'Error: ' + error.message);
     } finally {
       setIsWaiting(false);
     }
@@ -134,7 +170,14 @@ function App() {
       </div>
       <div className="container">
         <div className={`blob ${speaking ? 'speaking' : ''}`}>
-          <div className="blob-inner"></div>
+          <div className="blob-inner">
+            {/* Display AI response text */}
+            {aiResponse && (
+              <div className="ai-response-text">
+                <p>{aiResponse}</p>
+              </div>
+            )}
+          </div>
         </div>
         
         <button 

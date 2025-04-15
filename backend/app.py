@@ -74,9 +74,7 @@ def text_response():
         logging.error(f"Error in text response: {e}")
         return jsonify({'error': str(e)}), 500
 
-# Handle both paths for Vercel compatibility
 @app.route('/api/voice', methods=['POST'])
-@app.route('/voice', methods=['POST'])
 def voice_assistant():
     try:
         data = request.json
@@ -112,4 +110,9 @@ def voice_assistant():
 
     except Exception as e:
         logging.error(f"Error: {e}")
-        return jsonify({'error': str(e)}), 500 
+        return jsonify({'error': str(e)}), 500
+
+if __name__ == '__main__':
+    # Use port 5001 instead of 5000
+    port = int(os.environ.get('PORT', 5001))
+    app.run(host='0.0.0.0', port=port, debug=True) 
