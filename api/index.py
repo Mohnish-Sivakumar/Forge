@@ -11,8 +11,8 @@ import os
 
 app = Flask(__name__)
 
-# Allow CORS for your GitHub Pages domain
-CORS(app, resources={r"/api/*": {"origins": "https://mohnish-sivakumar.github.io"}})
+# Allow CORS for your Vercel domain
+CORS(app, resources={r"/api/*": {"origins": "*"}})
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -76,9 +76,4 @@ def voice_assistant():
 
     except Exception as e:
         logging.error(f"Error: {e}")
-        return jsonify({'error': str(e)}), 500
-
-if __name__ == '__main__':
-    # Ensure the app uses the PORT environment variable
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port)
+        return jsonify({'error': str(e)}), 500 
