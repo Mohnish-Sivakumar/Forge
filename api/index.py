@@ -11,8 +11,8 @@ import os
 
 app = Flask(__name__)
 
-# Allow CORS for all origins
-CORS(app)
+# Allow CORS for all origins with all methods
+CORS(app, resources={r"/*": {"origins": "*", "methods": ["GET", "POST", "OPTIONS"]}})
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -47,8 +47,13 @@ def generate_speech_chunks(text):
 def home():
     return "Welcome to the Voice Assistant API!"
 
-@app.route('/voice', methods=['POST'])
+# Fix the route to match exactly what the frontend is calling
+@app.route('/api/voice', methods=['POST', 'OPTIONS'])
 def voice_assistant():
+    # Handle CORS preflight request
+    if request.method == 'OPTIONS':
+        return '', 204
+        
     try:
         logging.info("Voice assistant endpoint called")
         data = request.json
