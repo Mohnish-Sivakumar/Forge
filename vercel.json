@@ -16,8 +16,10 @@
   ],
   "routes": [
     { "src": "/api/(.*)", "dest": "/api/index.py" },
-    { "src": "/(.*)", "dest": "/my-voice-assistant/build/$1" },
-    { "handle": "filesystem" },
-    { "src": "/.*", "dest": "/my-voice-assistant/build/index.html" }
+    { "src": "/static/(.*)", "dest": "/my-voice-assistant/build/static/$1" },
+    { "src": "/favicon.ico", "dest": "/my-voice-assistant/build/favicon.ico" },
+    { "src": "/manifest.json", "dest": "/my-voice-assistant/build/manifest.json" },
+    { "src": "/logo(.*).png", "dest": "/my-voice-assistant/build/logo$1.png" },
+    { "src": "/(.*)", "dest": "/my-voice-assistant/build/index.html" }
   ]
 } 

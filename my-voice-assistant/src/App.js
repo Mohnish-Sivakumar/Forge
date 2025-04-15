@@ -60,7 +60,10 @@ function App() {
   };
 
   const fetchResponse = async (text) => {
+    setIsWaiting(true);
+    setSpeaking(true);
     try {
+      // Using absolute path to ensure it works in all environments
       const response = await fetch('/api/voice', {
         method: 'POST',
         headers: {
@@ -70,7 +73,7 @@ function App() {
       });
 
       if (!response.ok) {
-        throw new Error('Network response was not ok');
+        throw new Error(`Network response was not ok: ${response.status} ${response.statusText}`);
       }
 
       const reader = response.body.getReader();
@@ -106,11 +109,13 @@ function App() {
         source.start(0);
       } else {
         console.error('No audio data received');
+        setSpeaking(false);
       }
 
     } catch (error) {
       console.error('Error:', error);
       setSpeaking(false);
+      alert('Error connecting to the voice API. Please try again.');
     } finally {
       setIsWaiting(false);
     }
