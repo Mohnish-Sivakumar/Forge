@@ -1,219 +1,187 @@
 from flask import Flask, request, jsonify, Response, stream_with_context
 from flask_cors import CORS
 import google.generativeai as genai
+import os
 import logging
 import json
-import traceback
-import os
 import io
 from kokoro import KPipeline
 import soundfile as sf
 
-# Initialize Flask app with simple CORS
+# Initialize Flask app - this is the serverless entry point
 app = Flask(__name__)
-CORS(app)
-logging.basicConfig(level=logging.DEBUG)
+# Configure CORS properly with all necessary settings
+CORS(app, resources={r"/*": {
+    "origins": "*",
+    "methods": ["GET", "POST", "OPTIONS"],
+    "allow_headers": ["Content-Type", "Authorization", "Accept", "X-Response-Text"],
+    "expose_headers": ["X-Response-Text"]
+}})
+
+# Setup basic logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Initialize Gemini AI
 GEMINI_API_KEY = "AIzaSyDrxMRoQ-Knm7gM_6YNHAiPhXoC6HN09S4"
-try:
-    genai.configure(api_key=GEMINI_API_KEY)
-    model = genai.GenerativeModel('gemini-1.5-flash')
-    logging.info("Gemini AI initialized successfully")
-except Exception as e:
-    logging.error(f"Error initializing Gemini: {e}")
-    model = None
+genai.configure(api_key=GEMINI_API_KEY)
 
-# Initialize Kokoro TTS - do this lazily to avoid cold start issues
-pipeline = None
+# Lazy-loading of models and pipelines
+_model = None
+_pipeline = None
 
-def get_tts_pipeline():
-    global pipeline
-    if pipeline is None:
+def get_model():
+    global _model
+    if _model is None:
+        _model = genai.GenerativeModel('gemini-1.5-flash')
+    return _model
+
+def get_pipeline():
+    global _pipeline
+    if _pipeline is None:
         try:
-            logging.info("Initializing Kokoro TTS pipeline")
-            pipeline = KPipeline(lang_code='a')  # Basic initialization
-            logging.info("Kokoro TTS pipeline initialized successfully")
+            _pipeline = KPipeline(lang_code='a')  # Basic initialization
         except Exception as e:
-            logging.error(f"Error initializing Kokoro TTS: {e}")
-            logging.error(traceback.format_exc())
-            return None
-    return pipeline
+            logger.error(f"Error initializing Kokoro: {e}")
+    return _pipeline
 
-def process_text_chunk(text):
-    """Process a chunk of text and convert to audio using Kokoro TTS"""
+def generate_audio(text):
+    """Process text to audio using Kokoro TTS"""
+    tts = get_pipeline()
+    if not tts:
+        return None
+        
+    chunks = []
     try:
-        tts_pipeline = get_tts_pipeline()
-        if tts_pipeline is None:
-            logging.error("TTS pipeline not available")
-            yield b''
-            return
-            
-        generator = tts_pipeline(text, voice='af_heart')
-        for _, _, audio in generator:
+        for _, _, audio in tts(text, voice='af_heart'):
             buffer = io.BytesIO()
             sf.write(buffer, audio, 24000, format='WAV')
             buffer.seek(0)
-            audio_data = buffer.read()
-            logging.debug(f"Generated audio chunk: {len(audio_data)} bytes")
-            yield audio_data
+            chunks.append(buffer.read())
     except Exception as e:
-        logging.error(f"Error processing TTS chunk: {e}")
-        logging.error(traceback.format_exc())
-        yield b''
+        logger.error(f"Error generating audio: {e}")
+        return None
+    
+    return chunks
 
-def generate_speech_chunks(text):
-    """Split text into chunks and generate audio for each chunk"""
-    # Split text into manageable chunks (by sentences)
-    chunks = [c.strip() + '.' for c in text.split('.') if c.strip()]
-    
-    # If no chunks were created, use the whole text
-    if not chunks:
-        chunks = [text]
-    
-    logging.info(f"Processing {len(chunks)} text chunks for TTS")
-    
-    for i, chunk in enumerate(chunks):
-        if chunk:
-            logging.info(f"Processing chunk {i+1}/{len(chunks)}: {chunk[:30]}...")
-            for audio in process_text_chunk(chunk):
-                if audio:
-                    yield audio
-
-# Basic OPTIONS handler for CORS preflight requests
+# Explicitly handle OPTIONS for all routes with proper CORS headers
 @app.route('/', defaults={'path': ''}, methods=['OPTIONS'])
 @app.route('/<path:path>', methods=['OPTIONS'])
-def options_handler(path):
+def handle_options(path):
     response = jsonify({'status': 'ok'})
     response.headers.add('Access-Control-Allow-Origin', '*')
-    response.headers.add('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept')
     response.headers.add('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-    response.headers.add('Access-Control-Max-Age', '3600')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept, X-Response-Text')
+    response.headers.add('Access-Control-Expose-Headers', 'X-Response-Text')
     return response
 
-@app.route('/')
+@app.route('/', methods=['GET'])
 def home():
-    return "Welcome to the Interview AI API! Server is running."
+    return jsonify({
+        "status": "ok",
+        "message": "Interview AI API is running"
+    })
 
 @app.route('/api/text', methods=['POST', 'OPTIONS'])
-def text_response():
-    # Handle OPTIONS request for CORS preflight
+def text_api():
+    # Handle preflight OPTIONS requests
     if request.method == 'OPTIONS':
-        return options_handler('')
+        return handle_options('')
         
     try:
-        # Log the request
-        logging.info(f"Received text request: {request.method} {request.path}")
+        # Get data from various possible sources
+        data = None
+        if request.is_json:
+            data = request.json
+        elif request.form:
+            data = request.form
+        elif request.get_data():
+            try:
+                data = json.loads(request.get_data())
+            except:
+                data = None
         
-        # Check if Gemini model is initialized
-        if model is None:
-            logging.error("Gemini model not initialized")
-            return jsonify({'error': 'AI service unavailable'}), 503
-            
-        # Parse request data
-        try:
-            if request.is_json:
-                data = request.json
-            elif request.form:
-                data = request.form.to_dict()
-            elif request.data:
-                data = json.loads(request.data)
-            else:
-                data = {}
-        except Exception as e:
-            logging.error(f"Failed to parse request data: {e}")
+        if not data:
             data = {}
-        
-        # Get user input
+            
         user_input = data.get('text', '')
-        logging.info(f"User input: {user_input}")
         
         if not user_input:
             return jsonify({'error': 'No input text provided'}), 400
             
         # Generate response with Gemini AI
+        model = get_model()
         prompt = f"""
         Respond to: {user_input}
         Important: Provide your response as a continuous paragraph without line breaks or bullet points.
         Keep punctuation minimal, using mostly commas and periods. Your response must be concise and strictly limited to a maximum of 30 words. Remember you're an 
         interviewer. Ask the questions, and provide feedback after hearing the response from the user.
-        Understand the context of the interview, and then ask a single question each time. After you hear the user's response, provide feedback on their response. Don't ask follow-up questions but tell them what specifically in their response was good and bad, why it was bad, and what could have been improved, and then move on to the next question.
         """
         
         response_text = model.generate_content(prompt).text
         response_text = ' '.join(response_text.split())
         
-        logging.info(f"Generated response: {response_text}")
-        
         # Return JSON response
-        response = jsonify({'response': response_text})
-        response.headers.add('Access-Control-Allow-Origin', '*')
-        return response
+        return jsonify({'response': response_text})
     
     except Exception as e:
-        logging.error(f"Error in text response: {e}")
-        logging.error(traceback.format_exc())
+        logger.error(f"Error in text response: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/voice', methods=['POST', 'OPTIONS'])
-def voice_response():
-    # Handle OPTIONS request for CORS preflight
+def voice_api():
+    # Handle preflight OPTIONS requests
     if request.method == 'OPTIONS':
-        return options_handler('')
+        return handle_options('')
         
     try:
-        # Log the request
-        logging.info(f"Received voice request: {request.method} {request.path}")
+        # Get data from various possible sources
+        data = None
+        if request.is_json:
+            data = request.json
+        elif request.form:
+            data = request.form
+        elif request.get_data():
+            try:
+                data = json.loads(request.get_data())
+            except:
+                data = None
         
-        # Check if Gemini model is initialized
-        if model is None:
-            logging.error("Gemini model not initialized")
-            return jsonify({'error': 'AI service unavailable'}), 503
-        
-        # Parse request data
-        try:
-            if request.is_json:
-                data = request.json
-            elif request.form:
-                data = request.form.to_dict()
-            elif request.data:
-                data = json.loads(request.data)
-            else:
-                data = {}
-        except Exception as e:
-            logging.error(f"Failed to parse request data: {e}")
+        if not data:
             data = {}
-        
-        # Get user input
+            
         user_input = data.get('text', '')
-        logging.info(f"User input: {user_input}")
         
         if not user_input:
             return jsonify({'error': 'No input text provided'}), 400
         
         # Generate response with Gemini AI
+        model = get_model()
         prompt = f"""
         Respond to: {user_input}
         Important: Provide your response as a continuous paragraph without line breaks or bullet points.
         Keep punctuation minimal, using mostly commas and periods. Your response must be concise and strictly limited to a maximum of 30 words. Remember you're an 
         interviewer. Ask the questions, and provide feedback after hearing the response from the user.
-        Understand the context of the interview, and then ask a single question each time. After you hear the user's response, provide feedback on their response. Don't ask follow-up questions but tell them what specifically in their response was good and bad, why it was bad, and what could have been improved, and then move on to the next question.
         """
         
         response_text = model.generate_content(prompt).text
         response_text = ' '.join(response_text.split())
         
-        logging.info(f"Generated response: {response_text}")
-
-        # Initialize TTS pipeline if needed
-        tts_pipeline = get_tts_pipeline()
-        if tts_pipeline is None:
-            logging.error("TTS pipeline not available, falling back to text-only response")
+        # Generate speech
+        audio_chunks = generate_audio(response_text)
+        
+        if not audio_chunks:
+            # Fall back to text if audio generation fails
             return jsonify({
                 'response': response_text,
-                'error': 'TTS not available',
-                'success': False
+                'success': False,
+                'error': 'TTS not available'
             })
+
+        # Define a generator function for streaming
+        def generate():
+            for chunk in audio_chunks:
+                yield chunk
 
         # Set headers for streaming audio response
         headers = {
@@ -223,35 +191,29 @@ def voice_response():
             'Access-Control-Expose-Headers': 'X-Response-Text'
         }
 
-        logging.info("Starting TTS audio generation and streaming")
         return Response(
-            stream_with_context(generate_speech_chunks(response_text)),
+            stream_with_context(generate()),
             mimetype='audio/wav',
             headers=headers
         )
     
     except Exception as e:
-        logging.error(f"Error in voice response: {e}")
-        logging.error(traceback.format_exc())
+        logger.error(f"Error in voice response: {e}")
+        response_text = "I'm sorry, I couldn't process your request." if 'response_text' not in locals() else locals()['response_text']
         return jsonify({
             'error': str(e),
-            'response': None,
+            'response': response_text,
             'success': False
         }), 500
 
-@app.route('/api/debug', methods=['GET'])
+@app.route('/api/debug', methods=['GET', 'OPTIONS'])
 def debug_info():
-    """Debug endpoint to check API health and configuration"""
-    tts_status = "not_initialized"
-    if pipeline is not None:
-        tts_status = "initialized"
+    """Debug endpoint to check API health"""
+    if request.method == 'OPTIONS':
+        return handle_options('')
         
-    info = {
+    return jsonify({
         'status': 'running',
-        'gemini_initialized': model is not None,
-        'tts_status': tts_status,
-        'environment': {k: v for k, v in dict(os.environ).items() 
-                        if not k.startswith('AWS_') and not k.startswith('VERCEL_')},
-        'python_version': os.environ.get('PYTHONVERSION', 'unknown')
-    }
-    return jsonify(info) 
+        'gemini_initialized': _model is not None,
+        'tts_initialized': _pipeline is not None
+    }) 

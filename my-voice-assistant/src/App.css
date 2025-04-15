@@ -236,3 +236,23 @@
   }
 }
 
+.error-message {
+  background-color: rgba(255, 99, 71, 0.2);
+  border: 1px solid tomato;
+  border-radius: 8px;
+  padding: 10px 15px;
+  margin-top: 20px;
+  color: #d32f2f;
+  font-size: 0.9rem;
+  max-width: 80%;
+  text-align: center;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  animation: fadeIn 0.3s ease-in;
+  z-index: 2;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+

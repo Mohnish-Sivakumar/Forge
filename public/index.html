@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interview AI</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            text-align: center;
+        }
+        .container {
+            max-width: 800px;
+            padding: 2rem;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1), 0 1px 3px rgba(0, 0, 0, 0.08);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 1rem;
+        }
+        p {
+            color: #666;
+            line-height: 1.6;
+            margin-bottom: 1.5rem;
+        }
+        .button {
+            background: linear-gradient(145deg, #b39ddb, #7e57c2);
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 50px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            text-decoration: none;
+            display: inline-block;
+        }
+        .button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(126, 87, 194, 0.4);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Interview AI</h1>
+        <p>Welcome to Interview AI, your personal interview practice assistant. Enhance your interview skills with real-time feedback and interactive practice sessions.</p>
+        <a href="/my-voice-assistant" class="button">Go to App</a>
+        <p><small>API Status: <span id="status">Checking...</span></small></p>
+    </div>
+
+    <script>
+        // Check API status
+        fetch('/api/debug')
+            .then(response => {
+                if (response.ok) return response.json();
+                throw new Error('API not available');
+            })
+            .then(data => {
+                document.getElementById('status').textContent = 'Online';
+                document.getElementById('status').style.color = '#4caf50';
+            })
+            .catch(error => {
+                document.getElementById('status').textContent = 'Offline';
+                document.getElementById('status').style.color = '#f44336';
+            });
+    </script>
+</body>
+</html> 

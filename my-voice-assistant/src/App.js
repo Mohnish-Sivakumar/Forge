@@ -6,11 +6,15 @@ function App() {
   const [speaking, setSpeaking] = useState(false);
   const [isWaiting, setIsWaiting] = useState(false);
   const [aiResponse, setAiResponse] = useState(''); // Store AI's text response
+  const [error, setError] = useState(''); // New error state
   const recognitionRef = useRef(null);
   const speechResultRef = useRef(''); // Store the speech result
   const audioSourceRef = useRef(null);
 
   const toggleListening = () => {
+    // Clear any previous errors
+    setError('');
+    
     if (listening) {
       console.log('Stopping speech recognition');
       recognitionRef.current.stop();
@@ -42,6 +46,7 @@ function App() {
       recognition.onerror = (event) => {
         console.error('Recognition error:', event.error);
         setListening(false);
+        setError(`Speech recognition error: ${event.error}`);
       };
 
       recognition.onend = () => {
@@ -77,26 +82,13 @@ function App() {
   const fetchResponse = async (text) => {
     setIsWaiting(true);
     setSpeaking(true);
+    setError(''); // Clear any previous errors
     
     // Stop any ongoing audio playback
     stopAudioPlayback();
     
     try {
       console.log('Sending request to API with text:', text);
-      
-      // Try to fetch debug info first (helpful for troubleshooting)
-      try {
-        const debugResponse = await fetch('/api/debug', {
-          method: 'GET'
-        });
-        
-        if (debugResponse.ok) {
-          const debugInfo = await debugResponse.json();
-          console.log('API Debug info:', debugInfo);
-        }
-      } catch (debugError) {
-        console.warn('Could not fetch debug info:', debugError);
-      }
       
       // First get text response for immediate feedback
       const textResponse = await fetch('/api/text', {
@@ -118,10 +110,12 @@ function App() {
         } else {
           console.error('No response field in JSON data');
           setAiResponse('Error: Could not retrieve response from API');
+          setError('The API returned an unexpected response format');
         }
       } else {
         console.error(`Failed to get text response: ${textResponse.status}`);
         setAiResponse(`Error: Failed to get response from API (Status ${textResponse.status})`);
+        setError(`API Error: The server returned status ${textResponse.status}`);
         setSpeaking(false);
         setIsWaiting(false);
         return;
@@ -133,6 +127,7 @@ function App() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Accept': 'audio/wav'
         },
         body: JSON.stringify({ text })
       });
@@ -203,6 +198,7 @@ function App() {
             }, (error) => {
               console.error('Error decoding audio:', error);
               setSpeaking(false);
+              setError(`Error decoding audio: ${error.message}`);
               
               // Fallback to browser's speech synthesis
               if ('speechSynthesis' in window) {
@@ -215,6 +211,7 @@ function App() {
           } else {
             console.error('No audio data received');
             setSpeaking(false);
+            setError('No audio data received from server');
             
             // Fallback to browser's speech synthesis
             if ('speechSynthesis' in window) {
@@ -227,6 +224,7 @@ function App() {
         } catch (audioError) {
           console.error('Error processing audio:', audioError);
           setSpeaking(false);
+          setError(`Error processing audio: ${audioError.message}`);
           
           // Fallback to browser's speech synthesis
           if ('speechSynthesis' in window) {
@@ -239,6 +237,7 @@ function App() {
       } else {
         console.error(`Failed to get audio response: ${audioResponse.status}`);
         setSpeaking(false);
+        setError(`Audio API Error: ${audioResponse.status}`);
         
         // Fallback to browser's speech synthesis
         if ('speechSynthesis' in window) {
@@ -252,6 +251,7 @@ function App() {
     } catch (error) {
       console.error('Error in fetch operation:', error);
       setSpeaking(false);
+      setError(`Network error: ${error.message}`);
       setAiResponse(prevResponse => prevResponse || 'Error: ' + error.message);
       
       // Fallback to browser's speech synthesis in case of error
@@ -297,6 +297,13 @@ function App() {
         <div className="status-text">
           {listening ? 'Listening...' : speaking ? 'Speaking...' : 'Click to speak'}
         </div>
+        
+        {/* Display error message if present */}
+        {error && (
+          <div className="error-message">
+            <p>{error}</p>
+          </div>
+        )}
       </div>
     </div>
   );
