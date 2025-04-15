@@ -24,10 +24,11 @@
         "Access-Control-Allow-Headers": "X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization"
       }
     },
-    { "src": "/manifest.json", "dest": "/my-voice-assistant/build/manifest.json" },
-    { "src": "/static/(.*)", "dest": "/my-voice-assistant/build/static/$1" },
-    { "src": "/favicon.ico", "dest": "/my-voice-assistant/build/favicon.ico" },
+    { "src": "/static/(.*)", "dest": "my-voice-assistant/build/static/$1" },
+    { "src": "/(.+\\.\\w+)$", "dest": "my-voice-assistant/build/$1" },
     { "handle": "filesystem" },
-    { "src": "/(.*)", "dest": "/my-voice-assistant/build/index.html" }
-  ]
+    { "src": "/(.*)", "dest": "my-voice-assistant/build/index.html" }
+  ],
+  "trailingSlash": false,
+  "cleanUrls": true
 } 
