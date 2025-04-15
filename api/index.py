@@ -10,7 +10,8 @@ import soundfile as sf
 import os
 
 app = Flask(__name__)
-CORS(app)
+# Configure CORS to allow requests from any origin with credentials
+CORS(app, resources={r"/*": {"origins": "*", "allow_headers": "*", "expose_headers": ["X-Response-Text"]}})
 logging.basicConfig(level=logging.DEBUG)
 
 # Initialize services with API key
@@ -41,6 +42,18 @@ def generate_speech_chunks(text):
                     logging.debug("Yielding audio chunk")
                     yield audio
 
+# Route for OPTIONS preflight requests - crucial for CORS
+@app.route('/', defaults={'path': ''}, methods=['OPTIONS'])
+@app.route('/<path:path>', methods=['OPTIONS'])
+def options_handler(path):
+    response = jsonify({'status': 'ok'})
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
+    response.headers.add('Access-Control-Allow-Credentials', 'true')
+    response.headers.add('Access-Control-Expose-Headers', 'X-Response-Text')
+    return response
+
 @app.route('/')
 def home():
     return "Welcome to the Voice Assistant API!"
@@ -49,7 +62,23 @@ def home():
 @app.route('/api/text', methods=['POST'])
 def text_response():
     try:
-        data = request.json
+        # Log the request for debugging
+        logging.info(f"Received text request: {request.method} {request.path}")
+        logging.info(f"Request headers: {dict(request.headers)}")
+        
+        # Handle the case when we get form data instead of JSON
+        if request.is_json:
+            data = request.json
+        else:
+            logging.warning("Request is not JSON, attempting to parse form data")
+            data = request.form.to_dict()
+            if not data and request.data:
+                try:
+                    import json
+                    data = json.loads(request.data)
+                except:
+                    logging.error(f"Failed to parse request data: {request.data}")
+        
         user_input = data.get('text', '')
         
         if not user_input:
@@ -68,7 +97,9 @@ def text_response():
         
         logging.info(f"Generated response: {response_text}")
         
-        return jsonify({'response': response_text})
+        response = jsonify({'response': response_text})
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        return response
     
     except Exception as e:
         logging.error(f"Error in text response: {e}")
@@ -79,7 +110,23 @@ def text_response():
 @app.route('/voice', methods=['POST'])
 def voice_assistant():
     try:
-        data = request.json
+        # Log the request for debugging
+        logging.info(f"Received voice request: {request.method} {request.path}")
+        logging.info(f"Request headers: {dict(request.headers)}")
+        
+        # Handle the case when we get form data instead of JSON
+        if request.is_json:
+            data = request.json
+        else:
+            logging.warning("Request is not JSON, attempting to parse form data")
+            data = request.form.to_dict()
+            if not data and request.data:
+                try:
+                    import json
+                    data = json.loads(request.data)
+                except:
+                    logging.error(f"Failed to parse request data: {request.data}")
+        
         user_input = data.get('text', '')
         
         if not user_input:
@@ -101,7 +148,9 @@ def voice_assistant():
         # Set headers to include the text response
         headers = {
             'Content-Type': 'audio/wav',
-            'X-Response-Text': response_text
+            'X-Response-Text': response_text,
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Expose-Headers': 'X-Response-Text'
         }
 
         return Response(

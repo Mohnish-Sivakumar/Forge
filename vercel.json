@@ -14,8 +14,33 @@
     }
   ],
   "routes": [
-    { "src": "/api/(.*)", "dest": "api/index.py" },
-    { "handle": "filesystem" },
-    { "src": "/(.*)", "dest": "/my-voice-assistant/build/index.html" }
+    {
+      "src": "/api/(.*)",
+      "methods": ["GET", "POST", "OPTIONS"],
+      "dest": "api/index.py"
+    },
+    {
+      "src": "/static/(.*)",
+      "dest": "/my-voice-assistant/build/static/$1"
+    },
+    {
+      "src": "/manifest.json",
+      "dest": "/my-voice-assistant/build/manifest.json"
+    },
+    {
+      "src": "/favicon.ico",
+      "dest": "/my-voice-assistant/build/favicon.ico"
+    },
+    {
+      "src": "/(.*\\.(json|js|css|png|jpg|svg|ico|txt))",
+      "dest": "/my-voice-assistant/build/$1"
+    },
+    {
+      "handle": "filesystem"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/my-voice-assistant/build/index.html"
+    }
   ]
 } 
