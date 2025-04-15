@@ -16,57 +16,67 @@ def get_model():
     return _model
 
 class handler(BaseHTTPRequestHandler):
+    def do_OPTIONS(self):
+        # Handle OPTIONS requests (CORS preflight)
+        self.send_response(200)
+        self.send_header('Access-Control-Allow-Credentials', 'true')
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version')
+        self.end_headers()
+        return
+        
     def do_GET(self):
+        # Simple response for GET requests
         self.send_response(200)
         self.send_header('Content-type', 'application/json')
+        self.send_header('Access-Control-Allow-Origin', '*')
         self.end_headers()
         
         response = {
-            "message": "Interview AI API is running",
-            "endpoints": ["/api/text", "/api/voice"],
-            "usage": "Send POST requests to these endpoints with JSON body: {'text': 'Your question'}"
+            "status": "ok",
+            "message": "Interview AI API is running"
         }
         
         self.wfile.write(json.dumps(response).encode())
         return
 
     def do_POST(self):
+        # Handle POST requests
         content_length = int(self.headers['Content-Length'])
         post_data = self.rfile.read(content_length)
         
+        # Set response headers
+        self.send_response(200)
+        self.send_header('Content-type', 'application/json')
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.end_headers()
+        
         try:
+            # Parse the request body
             data = json.loads(post_data.decode())
             user_input = data.get('text', '')
             
             if not user_input:
-                self.send_response(400)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                error_response = {"error": "No input text provided"}
-                self.wfile.write(json.dumps(error_response).encode())
+                response = {"error": "No input text provided"}
+                self.wfile.write(json.dumps(response).encode())
                 return
                 
             # Generate response with Gemini AI
             model = get_model()
             prompt = f"""
             Respond to: {user_input}
-            Important: Provide your response as a continuous paragraph without line breaks or bullet points.
-            Keep punctuation minimal, using mostly commas and periods. Your response must be concise and strictly limited to a maximum of 30 words. Remember you're an 
-            interviewer. Ask the questions, and provide feedback after hearing the response from the user.
+            Important: Keep your response concise, under 30 words.
             """
             
             response_text = model.generate_content(prompt).text
             response_text = ' '.join(response_text.split())
             
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
+            # Return the AI response
             response = {"response": response_text}
             self.wfile.write(json.dumps(response).encode())
             
         except Exception as e:
-            self.send_response(500)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            error_response = {"error": str(e)}
-            self.wfile.write(json.dumps(error_response).encode()) 
+            # Handle errors
+            response = {"error": str(e)}
+            self.wfile.write(json.dumps(response).encode()) 
