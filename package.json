@@ -4,6 +4,9 @@
   "scripts": {
     "build": "cd my-voice-assistant && npm install && npm run build"
   },
+  "engines": {
+    "node": ">=18.x"
+  },
   "dependencies": {
     "create-react-app": "^5.1.0"
   },

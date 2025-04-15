@@ -9,17 +9,13 @@
       "src": "my-voice-assistant/package.json",
       "use": "@vercel/static-build",
       "config": {
-        "distDir": "build",
-        "buildCommand": "cd my-voice-assistant && npm install && npm run build"
+        "distDir": "my-voice-assistant/build"
       }
     }
   ],
   "routes": [
-    { "src": "/api/(.*)", "dest": "/api/index.py" },
-    { "src": "/static/(.*)", "dest": "/my-voice-assistant/build/static/$1" },
-    { "src": "/favicon.ico", "dest": "/my-voice-assistant/build/favicon.ico" },
-    { "src": "/manifest.json", "dest": "/my-voice-assistant/build/manifest.json" },
-    { "src": "/logo(.*).png", "dest": "/my-voice-assistant/build/logo$1.png" },
-    { "src": "/(.*)", "dest": "/my-voice-assistant/build/index.html" }
+    { "src": "/api/(.*)", "dest": "api/index.py" },
+    { "handle": "filesystem" },
+    { "src": "/(.*)$", "dest": "/my-voice-assistant/build/index.html" }
   ]
 } 

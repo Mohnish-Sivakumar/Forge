@@ -11,7 +11,7 @@ import os
 
 app = Flask(__name__)
 
-# Allow CORS for your Vercel domain
+# Allow CORS for all origins
 CORS(app, resources={r"/api/*": {"origins": "*"}})
 
 logging.basicConfig(level=logging.DEBUG)
