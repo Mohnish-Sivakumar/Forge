@@ -67,16 +67,32 @@ function App() {
     try {
       console.log('Sending request to API with text:', text);
       
+      // Try to fetch debug info first
+      try {
+        const debugResponse = await fetch('/api/debug', {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json',
+          },
+          mode: 'cors',
+        });
+        
+        if (debugResponse.ok) {
+          const debugInfo = await debugResponse.json();
+          console.log('API Debug info:', debugInfo);
+        }
+      } catch (debugError) {
+        console.warn('Could not fetch debug info:', debugError);
+      }
+      
       // First get text response
       const textResponse = await fetch('/api/text', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
-          'Origin': window.location.origin,
         },
         body: JSON.stringify({ text }),
-        credentials: 'omit',
         mode: 'cors',
       });
       
@@ -94,11 +110,17 @@ function App() {
         }
       } else {
         console.error(`Failed to get text response: ${textResponse.status} ${textResponse.statusText}`);
-        if (textResponse.status === 405) {
-          setAiResponse('Error: API endpoint not accepting POST requests (405 Method Not Allowed). Please check server configuration.');
+        if (textResponse.status === 401) {
+          setAiResponse('Error: Authentication required for the API. Please check server configuration.');
+        } else if (textResponse.status === 405) {
+          setAiResponse('Error: API endpoint not accepting POST requests. Please check server configuration.');
         } else {
           setAiResponse(`Error: Failed to get response from API (Status ${textResponse.status})`);
         }
+        // Don't attempt audio if text failed with auth error
+        setSpeaking(false);
+        setIsWaiting(false);
+        return;
       }
       
       // Then get audio response
@@ -107,10 +129,8 @@ function App() {
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'audio/wav',
-          'Origin': window.location.origin,
         },
         body: JSON.stringify({ text }),
-        credentials: 'omit',
         mode: 'cors',
       });
       
@@ -161,10 +181,21 @@ function App() {
         }
       } else {
         console.error(`Failed to get audio response: ${audioResponse.status} ${audioResponse.statusText}`);
-        if (audioResponse.status === 405) {
-          console.error('API endpoint not accepting POST requests (405 Method Not Allowed)');
+        if (audioResponse.status === 401) {
+          console.error('Authentication required for the API endpoint');
+          // Use speech synthesis as fallback
+          if ('speechSynthesis' in window) {
+            const utterance = new SpeechSynthesisUtterance(aiResponse);
+            window.speechSynthesis.speak(utterance);
+            utterance.onend = () => {
+              setSpeaking(false);
+            };
+          } else {
+            setSpeaking(false);
+          }
+        } else {
+          setSpeaking(false);
         }
-        setSpeaking(false);
       }
       
     } catch (error) {
