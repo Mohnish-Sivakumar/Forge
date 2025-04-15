@@ -79,15 +79,45 @@ def handle_options(path):
 def home():
     return jsonify({
         "status": "ok",
-        "message": "Interview AI API is running"
+        "message": "Interview AI API is running",
+        "available_endpoints": {
+            "/api/text": {
+                "description": "Text-based AI interaction",
+                "methods": ["GET", "POST"]
+            },
+            "/api/voice": {
+                "description": "Voice-based AI interaction",
+                "methods": ["GET", "POST"]
+            },
+            "/api/debug": {
+                "description": "API status information",
+                "methods": ["GET"]
+            }
+        },
+        "documentation": "Access each endpoint with GET to see usage instructions"
     })
 
-@app.route('/api/text', methods=['POST', 'OPTIONS'])
+@app.route('/api/text', methods=['GET', 'POST', 'OPTIONS'])
 def text_api():
     # Handle preflight OPTIONS requests
     if request.method == 'OPTIONS':
         return handle_options('')
-        
+    
+    # Handle GET requests with API documentation
+    if request.method == 'GET':
+        return jsonify({
+            "message": "This is the Interview AI Text API endpoint",
+            "usage": {
+                "method": "POST",
+                "content_type": "application/json",
+                "body": {"text": "Your question or message here"},
+                "response": {"response": "AI's response to your message"}
+            },
+            "status": "available",
+            "example": "Try sending a POST request with JSON body: {'text': 'What makes a good software engineer?'}"
+        })
+    
+    # Handle POST requests (original functionality)
     try:
         # Get data from various possible sources
         data = None
@@ -128,11 +158,25 @@ def text_api():
         logger.error(f"Error in text response: {e}")
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/voice', methods=['POST', 'OPTIONS'])
+@app.route('/api/voice', methods=['GET', 'POST', 'OPTIONS'])
 def voice_api():
     # Handle preflight OPTIONS requests
     if request.method == 'OPTIONS':
         return handle_options('')
+    
+    # Handle GET requests with API documentation
+    if request.method == 'GET':
+        return jsonify({
+            "message": "This is the Interview AI Voice API endpoint",
+            "usage": {
+                "method": "POST",
+                "content_type": "application/json",
+                "body": {"text": "Your question or message here"},
+                "response": "Audio stream with AI's voice response"
+            },
+            "status": "available",
+            "note": "This endpoint returns audio data. Use the /api/text endpoint if you want a text response."
+        })
         
     try:
         # Get data from various possible sources

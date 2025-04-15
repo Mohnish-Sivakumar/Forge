@@ -14,7 +14,54 @@
       }
     ],
     "routes": [
-      { "src": "/api/(.*)", "dest": "/api/index.py" },
+      { 
+        "src": "/api/text",
+        "methods": ["GET"],
+        "dest": "/api/index.py"
+      },
+      { 
+        "src": "/api/voice",
+        "methods": ["GET"],
+        "dest": "/api/index.py"
+      },
+      { 
+        "src": "/api/text",
+        "methods": ["POST", "OPTIONS"],
+        "dest": "/api/index.py",
+        "headers": {
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Methods": "POST, OPTIONS",
+          "Access-Control-Allow-Headers": "Content-Type, Authorization"
+        }
+      },
+      { 
+        "src": "/api/voice",
+        "methods": ["POST", "OPTIONS"],
+        "dest": "/api/index.py",
+        "headers": {
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Methods": "POST, OPTIONS",
+          "Access-Control-Allow-Headers": "Content-Type, Authorization"
+        }
+      },
+      { 
+        "src": "/api/(.*)", 
+        "methods": ["GET", "POST", "OPTIONS"],
+        "dest": "/api/index.py",
+        "headers": {
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+          "Access-Control-Allow-Headers": "Content-Type, Authorization"
+        }
+      },
+      { 
+        "src": "/manifest.json", 
+        "dest": "/my-voice-assistant/build/manifest.json",
+        "headers": {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": "*"
+        }
+      },
       { "handle": "filesystem" },
       { "src": "/(.*)", "dest": "/my-voice-assistant/build/index.html" }
     ]

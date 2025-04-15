@@ -2,7 +2,8 @@
   "name": "forge",
   "private": true,
   "scripts": {
-    "build": "cd my-voice-assistant && npm install && npm run build"
+    "build": "cd my-voice-assistant && npm install && npm run build",
+    "postinstall": "mkdir -p public && cp -r my-voice-assistant/build/* public/ || true"
   },
   "engines": {
     "node": ">=18.x"
