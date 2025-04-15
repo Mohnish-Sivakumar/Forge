@@ -8,6 +8,7 @@ function App() {
   const [aiResponse, setAiResponse] = useState(''); // Store AI's text response
   const recognitionRef = useRef(null);
   const speechResultRef = useRef(''); // Store the speech result
+  const audioSourceRef = useRef(null);
 
   const toggleListening = () => {
     if (listening) {
@@ -60,21 +61,33 @@ function App() {
     }
   };
 
+  // Stop any ongoing audio playback
+  const stopAudioPlayback = () => {
+    if (audioSourceRef.current) {
+      try {
+        audioSourceRef.current.stop();
+        audioSourceRef.current.disconnect();
+        audioSourceRef.current = null;
+      } catch (error) {
+        console.warn('Error stopping audio:', error);
+      }
+    }
+  };
+
   const fetchResponse = async (text) => {
     setIsWaiting(true);
     setSpeaking(true);
     
+    // Stop any ongoing audio playback
+    stopAudioPlayback();
+    
     try {
       console.log('Sending request to API with text:', text);
       
-      // Try to fetch debug info first
+      // Try to fetch debug info first (helpful for troubleshooting)
       try {
         const debugResponse = await fetch('/api/debug', {
-          method: 'GET',
-          headers: {
-            'Accept': 'application/json',
-          },
-          mode: 'cors',
+          method: 'GET'
         });
         
         if (debugResponse.ok) {
@@ -85,15 +98,13 @@ function App() {
         console.warn('Could not fetch debug info:', debugError);
       }
       
-      // First get text response
+      // First get text response for immediate feedback
       const textResponse = await fetch('/api/text', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Accept': 'application/json',
         },
-        body: JSON.stringify({ text }),
-        mode: 'cors',
+        body: JSON.stringify({ text })
       });
       
       console.log('Text response status:', textResponse.status);
@@ -109,32 +120,34 @@ function App() {
           setAiResponse('Error: Could not retrieve response from API');
         }
       } else {
-        console.error(`Failed to get text response: ${textResponse.status} ${textResponse.statusText}`);
-        if (textResponse.status === 401) {
-          setAiResponse('Error: Authentication required for the API. Please check server configuration.');
-        } else if (textResponse.status === 405) {
-          setAiResponse('Error: API endpoint not accepting POST requests. Please check server configuration.');
-        } else {
-          setAiResponse(`Error: Failed to get response from API (Status ${textResponse.status})`);
-        }
-        // Don't attempt audio if text failed with auth error
+        console.error(`Failed to get text response: ${textResponse.status}`);
+        setAiResponse(`Error: Failed to get response from API (Status ${textResponse.status})`);
         setSpeaking(false);
         setIsWaiting(false);
         return;
       }
       
-      // Then get audio response
+      // Then get voice response to play audio
+      console.log('Fetching voice response...');
       const audioResponse = await fetch('/api/voice', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Accept': 'audio/wav',
         },
-        body: JSON.stringify({ text }),
-        mode: 'cors',
+        body: JSON.stringify({ text })
       });
       
+      console.log('Voice response status:', audioResponse.status);
+      
       if (audioResponse.ok) {
+        // Get the text response from headers if available
+        const headerText = audioResponse.headers.get('X-Response-Text');
+        if (headerText && headerText !== aiResponse) {
+          setAiResponse(headerText);
+          console.log('Updated response from headers:', headerText);
+        }
+      
+        // Process the audio stream
         try {
           const reader = audioResponse.body.getReader();
           const audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -142,6 +155,7 @@ function App() {
           let audioChunks = [];
           let totalLength = 0;
           
+          console.log('Reading audio stream...');
           while (true) {
             const {done, value} = await reader.read();
             if (done) break;
@@ -152,8 +166,10 @@ function App() {
             }
           }
           
+          console.log(`Received ${totalLength} bytes of audio data`);
+          
           if (totalLength > 0) {
-            console.log(`Processing ${totalLength} bytes of audio data`);
+            // Combine all chunks into a single array
             const combinedChunks = new Uint8Array(totalLength);
             let offset = 0;
             
@@ -162,46 +178,88 @@ function App() {
               offset += chunk.length;
             }
             
-            const audioBuffer = await audioContext.decodeAudioData(combinedChunks.buffer);
-            const source = audioContext.createBufferSource();
-            source.buffer = audioBuffer;
-            source.connect(audioContext.destination);
-            source.onended = () => {
+            console.log('Decoding audio data...');
+            
+            // Decode and play the audio
+            audioContext.decodeAudioData(combinedChunks.buffer, (buffer) => {
+              console.log('Audio decoded successfully, starting playback');
+              const source = audioContext.createBufferSource();
+              source.buffer = buffer;
+              source.connect(audioContext.destination);
+              
+              // Save reference to stop if needed
+              audioSourceRef.current = source;
+              
+              // Handle playback completion
+              source.onended = () => {
+                console.log('Audio playback completed');
+                setSpeaking(false);
+                audioSourceRef.current = null;
+              };
+              
+              // Start playback
+              source.start(0);
+              console.log('Audio playback started');
+            }, (error) => {
+              console.error('Error decoding audio:', error);
               setSpeaking(false);
-            };
-            source.start(0);
-            console.log('Audio playback started');
+              
+              // Fallback to browser's speech synthesis
+              if ('speechSynthesis' in window) {
+                console.log('Falling back to browser speech synthesis');
+                const utterance = new SpeechSynthesisUtterance(aiResponse);
+                utterance.onend = () => setSpeaking(false);
+                window.speechSynthesis.speak(utterance);
+              }
+            });
           } else {
             console.error('No audio data received');
             setSpeaking(false);
+            
+            // Fallback to browser's speech synthesis
+            if ('speechSynthesis' in window) {
+              console.log('Falling back to browser speech synthesis');
+              const utterance = new SpeechSynthesisUtterance(aiResponse);
+              utterance.onend = () => setSpeaking(false);
+              window.speechSynthesis.speak(utterance);
+            }
           }
         } catch (audioError) {
           console.error('Error processing audio:', audioError);
           setSpeaking(false);
+          
+          // Fallback to browser's speech synthesis
+          if ('speechSynthesis' in window) {
+            console.log('Falling back to browser speech synthesis due to error');
+            const utterance = new SpeechSynthesisUtterance(aiResponse);
+            utterance.onend = () => setSpeaking(false);
+            window.speechSynthesis.speak(utterance);
+          }
         }
       } else {
-        console.error(`Failed to get audio response: ${audioResponse.status} ${audioResponse.statusText}`);
-        if (audioResponse.status === 401) {
-          console.error('Authentication required for the API endpoint');
-          // Use speech synthesis as fallback
-          if ('speechSynthesis' in window) {
-            const utterance = new SpeechSynthesisUtterance(aiResponse);
-            window.speechSynthesis.speak(utterance);
-            utterance.onend = () => {
-              setSpeaking(false);
-            };
-          } else {
-            setSpeaking(false);
-          }
-        } else {
-          setSpeaking(false);
+        console.error(`Failed to get audio response: ${audioResponse.status}`);
+        setSpeaking(false);
+        
+        // Fallback to browser's speech synthesis
+        if ('speechSynthesis' in window) {
+          console.log('Falling back to browser speech synthesis due to failed request');
+          const utterance = new SpeechSynthesisUtterance(aiResponse);
+          utterance.onend = () => setSpeaking(false);
+          window.speechSynthesis.speak(utterance);
         }
       }
       
     } catch (error) {
       console.error('Error in fetch operation:', error);
       setSpeaking(false);
-      setAiResponse(aiResponse => aiResponse || 'Error: ' + error.message);
+      setAiResponse(prevResponse => prevResponse || 'Error: ' + error.message);
+      
+      // Fallback to browser's speech synthesis in case of error
+      if ('speechSynthesis' in window && aiResponse) {
+        const utterance = new SpeechSynthesisUtterance(aiResponse);
+        utterance.onend = () => setSpeaking(false);
+        window.speechSynthesis.speak(utterance);
+      }
     } finally {
       setIsWaiting(false);
     }

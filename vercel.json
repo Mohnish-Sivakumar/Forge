@@ -16,7 +16,15 @@
   "routes": [
     {
       "src": "/api/(.*)",
-      "dest": "api/index.py"
+      "dest": "api/index.py",
+      "headers": {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization, Accept",
+        "Access-Control-Allow-Credentials": "true",
+        "Access-Control-Expose-Headers": "X-Response-Text",
+        "Cache-Control": "no-cache, no-store, must-revalidate"
+      }
     },
     {
       "src": "/static/(.*)",
