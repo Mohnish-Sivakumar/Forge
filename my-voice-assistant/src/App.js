@@ -72,8 +72,12 @@ function App() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Origin': window.location.origin,
         },
         body: JSON.stringify({ text }),
+        credentials: 'omit',
+        mode: 'cors',
       });
       
       console.log('Text response status:', textResponse.status);
@@ -89,8 +93,12 @@ function App() {
           setAiResponse('Error: Could not retrieve response from API');
         }
       } else {
-        console.error('Failed to get text response');
-        setAiResponse('Error: Failed to get response from API');
+        console.error(`Failed to get text response: ${textResponse.status} ${textResponse.statusText}`);
+        if (textResponse.status === 405) {
+          setAiResponse('Error: API endpoint not accepting POST requests (405 Method Not Allowed). Please check server configuration.');
+        } else {
+          setAiResponse(`Error: Failed to get response from API (Status ${textResponse.status})`);
+        }
       }
       
       // Then get audio response
@@ -98,8 +106,12 @@ function App() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Accept': 'audio/wav',
+          'Origin': window.location.origin,
         },
         body: JSON.stringify({ text }),
+        credentials: 'omit',
+        mode: 'cors',
       });
       
       if (audioResponse.ok) {
@@ -148,7 +160,10 @@ function App() {
           setSpeaking(false);
         }
       } else {
-        console.error('Failed to get audio response:', audioResponse.status);
+        console.error(`Failed to get audio response: ${audioResponse.status} ${audioResponse.statusText}`);
+        if (audioResponse.status === 405) {
+          console.error('API endpoint not accepting POST requests (405 Method Not Allowed)');
+        }
         setSpeaking(false);
       }
       

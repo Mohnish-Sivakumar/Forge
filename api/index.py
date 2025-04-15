@@ -11,7 +11,14 @@ import os
 
 app = Flask(__name__)
 # Configure CORS to allow requests from any origin with credentials
-CORS(app, resources={r"/*": {"origins": "*", "allow_headers": "*", "expose_headers": ["X-Response-Text"]}})
+CORS(app, 
+     resources={r"/*": {
+         "origins": "*", 
+         "allow_headers": ["Content-Type", "Authorization", "Accept"],
+         "expose_headers": ["X-Response-Text"],
+         "methods": ["GET", "POST", "OPTIONS"],
+         "supports_credentials": True
+     }})
 logging.basicConfig(level=logging.DEBUG)
 
 # Initialize services with API key
@@ -48,10 +55,11 @@ def generate_speech_chunks(text):
 def options_handler(path):
     response = jsonify({'status': 'ok'})
     response.headers.add('Access-Control-Allow-Origin', '*')
-    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
-    response.headers.add('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept')
+    response.headers.add('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
     response.headers.add('Access-Control-Allow-Credentials', 'true')
     response.headers.add('Access-Control-Expose-Headers', 'X-Response-Text')
+    response.headers.add('Access-Control-Max-Age', '3600')
     return response
 
 @app.route('/')
