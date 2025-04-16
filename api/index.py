@@ -1,60 +1,55 @@
 from http.server import BaseHTTPRequestHandler
 import json
 import os
-import urllib.parse
+
+def generate_response(body, status_code=200):
+    return {
+        "statusCode": status_code,
+        "body": json.dumps(body),
+        "headers": {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Credentials": "true",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With"
+        }
+    }
 
 class handler(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
-        # Handle OPTIONS requests (CORS preflight)
         self.send_response(200)
         self.send_header('Access-Control-Allow-Credentials', 'true')
         self.send_header('Access-Control-Allow-Origin', '*')
         self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-        self.send_header('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization, Content-Type')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With')
+        self.send_header('Content-Type', 'application/json')
         self.end_headers()
-        return
+        self.wfile.write(json.dumps({"status": "ok"}).encode())
         
     def do_GET(self):
-        # Simple response for GET requests
         self.send_response(200)
-        self.send_header('Content-type', 'application/json')
+        self.send_header('Content-Type', 'application/json')
         self.send_header('Access-Control-Allow-Origin', '*')
         self.end_headers()
         
-        origin = self.headers.get('Origin', 'No origin header')
-        host = self.headers.get('Host', 'No host header')
-        
-        # For debugging purposes
         response = {
             "status": "ok",
             "message": "Interview AI API is running",
             "path": self.path,
-            "method": self.command,
-            "client_origin": origin,
-            "server_host": host,
-            "custom_flag": os.environ.get('USE_CUSTOM_URLS', 'Not set')
+            "method": "GET",
+            "endpoint": "text" if "/text" in self.path else "voice" if "/voice" in self.path else "unknown"
         }
         
         self.wfile.write(json.dumps(response).encode())
-        return
 
     def do_POST(self):
-        # Always respond with 200 OK for POST requests
         self.send_response(200)
-        self.send_header('Content-type', 'application/json')
+        self.send_header('Content-Type', 'application/json')
         self.send_header('Access-Control-Allow-Origin', '*')
-        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
         self.end_headers()
-        
-        # Parse the path to handle different endpoints
-        raw_path = self.path
-        parsed_path = urllib.parse.urlparse(raw_path)
-        path = parsed_path.path
         
         # Get POST data
         content_length = int(self.headers.get('Content-Length', 0))
-        post_data = b'{}'
         user_text = "No data provided"
         
         if content_length > 0:
@@ -65,36 +60,64 @@ class handler(BaseHTTPRequestHandler):
             except Exception as e:
                 user_text = f"Error parsing JSON: {str(e)}"
         
-        # Get origin information from headers
-        origin = self.headers.get('Origin', 'No origin header')
-        host = self.headers.get('Host', 'No host header')
-        
-        # Debug information
-        debug_info = {
-            "raw_path": raw_path,
-            "parsed_path": path,
-            "method": self.command,
-            "content_length": content_length,
-            "user_text": user_text,
-            "client_origin": origin,
-            "server_host": host
-        }
-        
-        # Handle different endpoints with better path matching
-        if path == '/api/text' or path == '/api/text/' or path.startswith('/api/text?'):
+        # Handle different endpoints
+        if "/api/text" in self.path:
             response = {
                 "response": f"API response for: {user_text}",
-                "debug": debug_info
+                "endpoint": "text"
             }
-        elif path == '/api/voice' or path == '/api/voice/' or path.startswith('/api/voice?'):
+        elif "/api/voice" in self.path:
             response = {
                 "response": f"Voice response for: {user_text}",
-                "debug": debug_info
+                "endpoint": "voice"
             }
         else:
             response = {
-                "response": f"Unknown endpoint: {path}",
-                "debug": debug_info
+                "response": f"Unknown endpoint: {self.path}",
+                "endpoint": "unknown"
             }
         
-        self.wfile.write(json.dumps(response).encode()) 
+        self.wfile.write(json.dumps(response).encode())
+
+# For direct testing outside of Vercel
+def test(event, context):
+    path = event.get('path', '')
+    method = event.get('httpMethod', 'GET')
+    headers = event.get('headers', {})
+    body = event.get('body', '{}')
+    
+    if method == 'OPTIONS':
+        return generate_response({"status": "ok"})
+    
+    if method == 'GET':
+        return generate_response({
+            "status": "ok",
+            "message": "Interview AI API is running",
+            "path": path,
+            "method": method
+        })
+    
+    if method == 'POST':
+        try:
+            request_data = json.loads(body)
+            user_text = request_data.get('text', '')
+        except:
+            user_text = "Error parsing JSON"
+        
+        if "/api/text" in path:
+            return generate_response({
+                "response": f"API response for: {user_text}",
+                "endpoint": "text"
+            })
+        elif "/api/voice" in path:
+            return generate_response({
+                "response": f"Voice response for: {user_text}",
+                "endpoint": "voice"
+            })
+        else:
+            return generate_response({
+                "response": f"Unknown endpoint: {path}",
+                "endpoint": "unknown"
+            })
+    
+    return generate_response({"error": "Method not allowed"}, 405) 

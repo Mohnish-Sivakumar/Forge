@@ -10,7 +10,7 @@
   ],
   "routes": [
     {
-      "src": "/api/(.*)",
+      "src": "^/api/(.*)$",
       "dest": "api/index.py",
       "headers": {
         "Access-Control-Allow-Credentials": "true",
@@ -19,6 +19,7 @@
         "Access-Control-Allow-Headers": "X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization"
       }
     },
+    { "src": "/api-test", "dest": "api/test.html" },
     { "src": "/static/(.*)", "dest": "my-voice-assistant/build/static/$1" },
     { "handle": "filesystem" },
     { "src": "/(.*)", "dest": "my-voice-assistant/build/index.html" }

@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .response {
+            background-color: #f5f5f5;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 15px;
+            margin-top: 20px;
+            white-space: pre-wrap;
+        }
+        button {
+            padding: 10px 15px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        input {
+            padding: 10px;
+            width: 50%;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>API Test Page</h1>
+    <p>Use this page to test the API endpoints</p>
+    
+    <div>
+        <h2>Test GET request</h2>
+        <button onclick="testGet()">Test GET /api/text</button>
+        <div id="getResponse" class="response"></div>
+    </div>
+    
+    <div>
+        <h2>Test POST request</h2>
+        <input type="text" id="textInput" placeholder="Enter text to send" value="Hello from test page">
+        <button onclick="testPost()">Test POST /api/text</button>
+        <div id="postResponse" class="response"></div>
+    </div>
+
+    <script>
+        async function testGet() {
+            const responseDiv = document.getElementById('getResponse');
+            responseDiv.textContent = 'Loading...';
+            
+            try {
+                const response = await fetch('/api/text');
+                const data = await response.json();
+                responseDiv.textContent = JSON.stringify(data, null, 2);
+            } catch (error) {
+                responseDiv.textContent = 'Error: ' + error.message;
+            }
+        }
+        
+        async function testPost() {
+            const responseDiv = document.getElementById('postResponse');
+            const textInput = document.getElementById('textInput').value;
+            responseDiv.textContent = 'Loading...';
+            
+            try {
+                const response = await fetch('/api/text', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ text: textInput })
+                });
+                const data = await response.json();
+                responseDiv.textContent = JSON.stringify(data, null, 2);
+            } catch (error) {
+                responseDiv.textContent = 'Error: ' + error.message;
+            }
+        }
+    </script>
+</body>
+</html> 
