@@ -15,14 +15,15 @@ def generate_response(body, status_code=200):
         }
     }
 
+# Simplified handler for API requests
 class handler(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
         self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
         self.send_header('Access-Control-Allow-Credentials', 'true')
         self.send_header('Access-Control-Allow-Origin', '*')
         self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
         self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With')
-        self.send_header('Content-Type', 'application/json')
         self.end_headers()
         self.wfile.write(json.dumps({"status": "ok"}).encode())
         
@@ -35,48 +36,42 @@ class handler(BaseHTTPRequestHandler):
         response = {
             "status": "ok",
             "message": "Interview AI API is running",
-            "path": self.path,
-            "method": "GET",
-            "endpoint": "text" if "/text" in self.path else "voice" if "/voice" in self.path else "unknown"
+            "path": self.path
         }
         
+        if "/api/text" in self.path:
+            response["endpoint"] = "text"
+        elif "/api/voice" in self.path:
+            response["endpoint"] = "voice"
+            
         self.wfile.write(json.dumps(response).encode())
 
     def do_POST(self):
+        content_length = int(self.headers.get('Content-Length', 0))
+        request_body = self.rfile.read(content_length) if content_length else b'{}'
+        
+        try:
+            request_data = json.loads(request_body)
+            user_text = request_data.get('text', '')
+        except:
+            user_text = "Error parsing JSON"
+            
         self.send_response(200)
         self.send_header('Content-Type', 'application/json')
         self.send_header('Access-Control-Allow-Origin', '*')
         self.end_headers()
         
-        # Get POST data
-        content_length = int(self.headers.get('Content-Length', 0))
-        user_text = "No data provided"
+        response = {"status": "success"}
         
-        if content_length > 0:
-            try:
-                post_data = self.rfile.read(content_length)
-                request_data = json.loads(post_data)
-                user_text = request_data.get('text', '')
-            except Exception as e:
-                user_text = f"Error parsing JSON: {str(e)}"
-        
-        # Handle different endpoints
         if "/api/text" in self.path:
-            response = {
-                "response": f"API response for: {user_text}",
-                "endpoint": "text"
-            }
+            response["response"] = f"API response for: {user_text}"
+            response["endpoint"] = "text"
         elif "/api/voice" in self.path:
-            response = {
-                "response": f"Voice response for: {user_text}",
-                "endpoint": "voice"
-            }
+            response["response"] = f"Voice response for: {user_text}"
+            response["endpoint"] = "voice"
         else:
-            response = {
-                "response": f"Unknown endpoint: {self.path}",
-                "endpoint": "unknown"
-            }
-        
+            response["response"] = f"Unknown endpoint: {self.path}"
+            
         self.wfile.write(json.dumps(response).encode())
 
 # For direct testing outside of Vercel
