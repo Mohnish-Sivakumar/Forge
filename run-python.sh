@@ -6,8 +6,8 @@ export PYTHON_VERSION=3.12.9
 
 # Fix dependency issues by removing problematic packages first
 pip uninstall -y flask werkzeug
-# Then install with the correct versions
-pip install -r requirements.txt
+# Then install with the correct versions including Kokoro
+pip install flask==2.2.3 flask-cors==3.0.10 werkzeug==2.2.3 google-generativeai==0.3.1 gunicorn==20.1.0 kokoro==0.2.1 soundfile==0.12.1 numpy>=1.20.0
 
 # Print debug information
 echo "==> Python path: $(which python)"
@@ -19,6 +19,11 @@ pip list
 cat > launcher.py << 'EOPY'
 import os
 import sys
+import logging
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logging.info("Starting server...")
 
 # Make sure our dependencies are available
 try:
@@ -27,6 +32,16 @@ try:
     print(f"==> Flask version: {flask.__version__}")
     import werkzeug
     print(f"==> Werkzeug version: {werkzeug.__version__}")
+    
+    # Try to import Kokoro
+    try:
+        from kokoro import KPipeline
+        print("==> Kokoro TTS is available")
+    except ImportError as e:
+        print(f"==> Kokoro import error: {e}")
+    except Exception as e:
+        print(f"==> Error initializing Kokoro: {e}")
+        
 except ImportError as e:
     print(f"==> Error importing dependencies: {e}")
     sys.exit(1)

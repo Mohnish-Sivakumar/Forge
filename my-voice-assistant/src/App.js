@@ -101,15 +101,102 @@ function App() {
     // Stop any ongoing audio playback
     stopAudioPlayback();
     
-    // Use the calculated API URL
-    const apiUrl = `${API_BASE_URL}/text`;
+    // Choose API endpoint based on settings
+    const useVoiceApi = true; // Set to true to use voice API, false for text-only
+    const apiUrl = `${API_BASE_URL}/${useVoiceApi ? 'voice' : 'text'}`;
     
     try {
       console.log('Sending request to API with text:', text);
       console.log('Using API URL:', apiUrl);
       
-      // Then send the actual POST request
-      const textResponse = await fetch(apiUrl, {
+      if (useVoiceApi) {
+        // Use the voice API which returns audio data
+        const voiceResponse = await fetch(apiUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ text })
+        });
+        
+        console.log('Voice response status:', voiceResponse.status);
+        
+        if (voiceResponse.ok) {
+          // Get the text response from the header
+          const responseText = voiceResponse.headers.get('X-Response-Text');
+          if (responseText) {
+            setAiResponse(responseText);
+          } else {
+            setAiResponse("Received voice response");
+          }
+          
+          // Create an audio context
+          const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+          
+          // Get the response as a binary stream
+          const reader = voiceResponse.body.getReader();
+          
+          // Read chunks of data
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            
+            try {
+              // Convert the chunk to audio buffer
+              const audioBuffer = await audioContext.decodeAudioData(value.buffer);
+              
+              // Play the audio
+              const source = audioContext.createBufferSource();
+              source.buffer = audioBuffer;
+              source.connect(audioContext.destination);
+              audioSourceRef.current = source;
+              
+              // When audio ends, set speaking to false
+              source.onended = () => {
+                setSpeaking(false);
+              };
+              
+              source.start(0);
+            } catch (audioError) {
+              console.error('Error decoding audio:', audioError);
+              // Fallback to browser speech synthesis
+              if ('speechSynthesis' in window && responseText) {
+                const utterance = new SpeechSynthesisUtterance(responseText);
+                utterance.onend = () => setSpeaking(false);
+                window.speechSynthesis.speak(utterance);
+              } else {
+                setSpeaking(false);
+              }
+            }
+          }
+        } else {
+          // Handle error and fallback to text API
+          console.error(`Failed to get voice response: ${voiceResponse.status}`);
+          // Fallback to text API
+          await fetchTextResponse(text);
+        }
+      } else {
+        // Use text API
+        await fetchTextResponse(text);
+      }
+      
+      // Mark as no longer waiting
+      setIsWaiting(false);
+    } catch (error) {
+      console.error('Network error in fetch operation:', error);
+      setSpeaking(false);
+      setError(`Network error: ${error.message}`);
+      setAiResponse(prevResponse => prevResponse || 'Error: ' + error.message);
+      setIsWaiting(false);
+    }
+  };
+  
+  // Helper function to fetch text-only response
+  const fetchTextResponse = async (text) => {
+    const textApiUrl = `${API_BASE_URL}/text`;
+    
+    try {
+      const textResponse = await fetch(textApiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -158,14 +245,10 @@ function App() {
         setAiResponse(`Error: Failed to get response from API (Status ${textResponse.status})`);
         setSpeaking(false);
       }
-      
-      // Mark as no longer waiting
-      setIsWaiting(false);
     } catch (error) {
-      console.error('Network error in fetch operation:', error);
+      console.error('Error in text fallback:', error);
       setSpeaking(false);
-      setError(`Network error: ${error.message}`);
-      setAiResponse(prevResponse => prevResponse || 'Error: ' + error.message);
+      setError(`Error in text fallback: ${error.message}`);
       setIsWaiting(false);
     }
   };
