@@ -1,40 +1,16 @@
 {
   "version": 2,
-  "builds": [
-    {
-      "src": "api/index.py",
-      "use": "@vercel/python"
-    },
-    {
-      "src": "my-voice-assistant/package.json",
-      "use": "@vercel/static-build",
-      "config": {
-        "distDir": "my-voice-assistant/build"
-      }
-    }
+  "buildCommand": "cd my-voice-assistant && npm install && npm run build",
+  "outputDirectory": "my-voice-assistant/build",
+  "rewrites": [
+    { "source": "/api/:path*", "destination": "/api/index.py" }
   ],
-  "routes": [
-    {
-      "src": "/api/(.*)",
-      "methods": ["GET", "POST", "OPTIONS"],
-      "dest": "api/index.py"
-    },
-    {
-      "src": "/static/(.*)",
-      "dest": "my-voice-assistant/build/static/$1"
-    },
-    {
-      "src": "/(.*\\.(js|css|json|png|ico|svg))",
-      "dest": "my-voice-assistant/build/$1"
-    },
-    {
-      "handle": "filesystem"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "my-voice-assistant/build/index.html"
+  "functions": {
+    "api/index.py": {
+      "memory": 1024,
+      "maxDuration": 10
     }
-  ],
+  },
   "headers": [
     {
       "source": "/api/(.*)",
@@ -43,6 +19,14 @@
         { "key": "Access-Control-Allow-Origin", "value": "*" },
         { "key": "Access-Control-Allow-Methods", "value": "GET, POST, OPTIONS" },
         { "key": "Access-Control-Allow-Headers", "value": "X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization" }
+      ]
+    },
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "X-Frame-Options", "value": "DENY" },
+        { "key": "X-XSS-Protection", "value": "1; mode=block" }
       ]
     }
   ]
