@@ -3,6 +3,7 @@
 # Export environment variables
 export SERVE_STATIC=true
 export PYTHON_VERSION=3.12.9
+export FLASK_APP=backend/app.py
 
 # Install dependencies again to make sure they're available
 pip install -r requirements.txt
@@ -13,8 +14,5 @@ echo "==> Python version: $(python --version)"
 echo "==> Installed packages:"
 pip list
 
-# Find gunicorn and use the full path
-GUNICORN_PATH=$(pip show gunicorn | grep Location | awk '{print $2}')/gunicorn/app/wsgiapp.py
-
-echo "==> Starting application with gunicorn"
-python $GUNICORN_PATH backend.app:app --bind 0.0.0.0:$PORT
+echo "==> Starting application with Flask"
+cd backend && python -m flask run --host=0.0.0.0 --port=$PORT 

@@ -3,7 +3,7 @@
   "private": true,
   "scripts": {
     "build": "cd my-voice-assistant && npm install && npm run build",
-    "start": "gunicorn backend.app:app --bind 0.0.0.0:$PORT"
+    "start": "./run.sh"
   },
   "engines": {
     "node": "18.x",
