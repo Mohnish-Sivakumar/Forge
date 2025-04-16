@@ -9,6 +9,16 @@ This application consists of two services that need to be deployed on Render:
 1. **Frontend**: A static React application
 2. **Backend**: A Python Flask API 
 
+### Free Tier Note
+
+All services in the render.yaml file are configured to use Render's **free tier**. No payment information should be required.
+
+If you're still seeing a payment prompt:
+
+1. You can deploy the services manually (see Option 2 below)
+2. Make sure to select "Free" as the instance type during manual setup
+3. Note that free tier instances will spin down after inactivity periods
+
 ### Option 1: Using render.yaml (Recommended)
 
 The easiest way to deploy this application is using the `render.yaml` Blueprint:
@@ -30,6 +40,8 @@ The easiest way to deploy this application is using the `render.yaml` Blueprint:
    - **Name**: forge-frontend
    - **Build Command**: `cd my-voice-assistant && npm install && npm run build`
    - **Publish Directory**: `my-voice-assistant/build`
+   - **Branch**: main (or your preferred branch)
+   - **Instance Type**: Free
 
 #### Backend Deployment  
 
@@ -40,9 +52,25 @@ The easiest way to deploy this application is using the `render.yaml` Blueprint:
    - **Environment**: Python
    - **Build Command**: `pip install -r requirements-render.txt`
    - **Start Command**: `gunicorn backend.app:app --bind 0.0.0.0:$PORT`
+   - **Instance Type**: Free
    - **Environment Variables**:
      - `PYTHON_VERSION`: 3.9
      - `GEMINI_API_KEY`: Your Google Gemini API key
+
+### Alternative Option: Single Service Deployment
+
+If you're still having issues with payment requirements, you can use a simpler approach of deploying only the backend service, which will serve both the API and static frontend:
+
+1. Go to the Render Dashboard and select "Web Service"
+2. Connect your GitHub repository
+3. Use the following settings:
+   - **Name**: forge-app
+   - **Environment**: Python
+   - **Build Command**: `pip install -r requirements-render.txt && cd my-voice-assistant && npm install && npm run build`
+   - **Start Command**: `cd backend && gunicorn app:app --bind 0.0.0.0:$PORT`
+   - **Instance Type**: Free
+
+Then modify the backend/app.py file to serve static files from the build directory.
 
 ## Environment Setup
 
@@ -72,5 +100,5 @@ This will start the React frontend on port 3000 and the Flask backend on port 50
 
 ## Project Structure
 
-- `/api` - Python serverless functions for the backend
+- `/backend` - Python Flask API
 - `/my-voice-assistant` - React application for the frontend

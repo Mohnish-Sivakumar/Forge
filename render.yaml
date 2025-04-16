@@ -1,10 +1,11 @@
 services:
   # Frontend service - React app
-  - type: static
+  - type: web
     name: forge-frontend
+    env: static
     plan: free
     buildCommand: cd my-voice-assistant && npm install && npm run build
-    publishDir: ./my-voice-assistant/build
+    staticPublishPath: ./my-voice-assistant/build
     routes:
       - type: rewrite
         source: /*
@@ -16,8 +17,8 @@ services:
   # Backend service - Python API
   - type: web
     name: forge-api
-    plan: free
     env: python
+    plan: free
     buildCommand: pip install -r requirements-render.txt
     startCommand: gunicorn backend.app:app --bind 0.0.0.0:$PORT
     envVars:

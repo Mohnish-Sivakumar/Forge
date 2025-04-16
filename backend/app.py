@@ -1,11 +1,15 @@
-from flask import Flask, request, jsonify, Response, stream_with_context
+from flask import Flask, request, jsonify, Response, stream_with_context, send_from_directory
 from flask_cors import CORS
 import google.generativeai as genai
 import logging
 import os
 import json
 
-app = Flask(__name__)
+# Check if we're serving static files too (combined deployment)
+SERVE_STATIC = os.environ.get("SERVE_STATIC", "False").lower() in ("true", "1", "t")
+static_folder = "../my-voice-assistant/build" if SERVE_STATIC else None
+
+app = Flask(__name__, static_folder=static_folder)
 CORS(app, resources={r"/*": {"origins": "*"}})
 logging.basicConfig(level=logging.INFO)
 
@@ -21,7 +25,23 @@ def health():
 
 @app.route('/')
 def home():
+    if SERVE_STATIC:
+        return send_from_directory(app.static_folder, 'index.html')
     return jsonify({"message": "Welcome to the Interview AI API!"})
+
+# Serve static files if SERVE_STATIC is enabled
+@app.route('/<path:path>')
+def serve_static(path):
+    if SERVE_STATIC:
+        if path.startswith('api/'):
+            # Don't try to serve API calls as static files
+            return jsonify({"error": "Not found"}), 404
+        elif os.path.exists(os.path.join(app.static_folder, path)):
+            return send_from_directory(app.static_folder, path)
+        else:
+            # Return index.html for client-side routing
+            return send_from_directory(app.static_folder, 'index.html')
+    return jsonify({"error": "Not found"}), 404
 
 @app.route('/api/text', methods=['POST', 'OPTIONS'])
 def text_response():

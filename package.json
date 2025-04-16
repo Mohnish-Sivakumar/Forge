@@ -3,18 +3,10 @@
   "private": true,
   "scripts": {
     "build": "cd my-voice-assistant && npm install && npm run build",
-    "start": "cd backend && gunicorn app:app --bind 0.0.0.0:$PORT",
-    "postinstall": "pip install -r requirements-render.txt",
-    "dev": "concurrently \"cd my-voice-assistant && npm start\" \"cd backend && python app.py\""
+    "start": "gunicorn backend.app:app --bind 0.0.0.0:$PORT"
   },
   "engines": {
-    "node": ">=18.x",
-    "npm": ">=9.x"
-  },
-  "dependencies": {
-    "create-react-app": "^5.1.0"
-  },
-  "devDependencies": {
-    "concurrently": "^9.1.2"
+    "node": "18.x",
+    "npm": "9.x"
   }
 }
