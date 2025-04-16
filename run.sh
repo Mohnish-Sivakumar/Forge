@@ -1,30 +1,38 @@
 #!/bin/bash
 
-# Set up the environment
+# Export environment variables
 export SERVE_STATIC=true
-export PYTHONPATH=$PYTHONPATH:$(pwd)
+export PYTHON_VERSION=3.12.9
 
-# Install dependencies
-pip install -r requirements.txt
+# Fix dependency issues by removing problematic packages first
+pip uninstall -y flask werkzeug
 
-# Print diagnostic info
+# Install dependencies with specific versions
+pip install flask==2.2.3 flask-cors==3.0.10 werkzeug==2.2.3 google-generativeai==0.3.1 gunicorn==20.1.0
+
+# Print Python path and installed packages for debugging
+echo "==> Python path: $(which python)"
 echo "==> Python version: $(python --version)"
 echo "==> Installed packages:"
 pip list
 
-# Check if Kokoro is installed properly
-echo "==> Checking Kokoro installation..."
-python -c "try:
-    from kokoro import KPipeline
-    print('Kokoro is available')
-    try:
-        pipeline = KPipeline()
-        print('Kokoro pipeline initialized successfully')
-    except Exception as e:
-        print(f'Failed to initialize KPipeline: {e}')
-except ImportError as e:
-    print(f'Kokoro import error: {e}')"
+# Create a simple Python script to test imports
+cat > test_imports.py << 'EOF'
+import flask
+import werkzeug
+print(f"Flask version: {flask.__version__}")
+print(f"Werkzeug version: {werkzeug.__version__}")
+EOF
 
-# Start the application
-cd backend
-python -m flask run --host=0.0.0.0 --port=${PORT:-5000}
+echo "==> Testing imports:"
+python test_imports.py
+
+# Try to use gunicorn directly
+echo "==> Starting application with gunicorn"
+gunicorn backend.app:app --bind 0.0.0.0:$PORT
+
+# If gunicorn fails, try running with Python directly
+if [ $? -ne 0 ]; then
+    echo "==> Gunicorn failed, trying Python directly"
+    python run-python.sh
+fi

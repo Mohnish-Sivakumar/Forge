@@ -7,8 +7,9 @@ const getApiBaseUrl = () => {
   if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
     return '/api';  // For local development with proxy
   } else {
-    // For production deployment on Vercel
-    return '/api';
+    // For production - this assumes the API URL will be provided via environment or configuration
+    // This might need to be updated with your actual Render API URL
+    return `${window.location.protocol}//${window.location.hostname.replace('forge-frontend', 'forge-api')}/api`;
   }
 };
 
@@ -100,15 +101,15 @@ function App() {
     // Stop any ongoing audio playback
     stopAudioPlayback();
     
-    // Use only the text API endpoint for now
-    const apiUrl = `${API_BASE_URL}`;
+    // Use the calculated API URL
+    const apiUrl = `${API_BASE_URL}/text`;
     
     try {
       console.log('Sending request to API with text:', text);
       console.log('Using API URL:', apiUrl);
       
-      // Send the POST request
-      const apiResponse = await fetch(apiUrl, {
+      // Then send the actual POST request
+      const textResponse = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -116,11 +117,11 @@ function App() {
         body: JSON.stringify({ text })
       });
       
-      console.log('Response status:', apiResponse.status);
+      console.log('Text response status:', textResponse.status);
       
-      if (apiResponse.ok) {
-        const jsonData = await apiResponse.json();
-        console.log('Response data:', jsonData);
+      if (textResponse.ok) {
+        const jsonData = await textResponse.json();
+        console.log('Text response data:', jsonData);
         
         if (jsonData.response) {
           setAiResponse(jsonData.response);
@@ -145,16 +146,16 @@ function App() {
           setSpeaking(false);
         }
       } else {
-        console.error(`Failed to get response: ${apiResponse.status}`);
+        console.error(`Failed to get text response: ${textResponse.status}`);
         // Try to get error message from response if possible
         try {
-          const errorData = await apiResponse.json();
+          const errorData = await textResponse.json();
           console.log('Error response:', errorData);
-          setError(`API Error (${apiResponse.status}): ${errorData.message || 'Unknown error'}`);
+          setError(`API Error (${textResponse.status}): ${errorData.message || 'Unknown error'}`);
         } catch {
-          setError(`API Error: The server returned status ${apiResponse.status}`);
+          setError(`API Error: The server returned status ${textResponse.status}`);
         }
-        setAiResponse(`Error: Failed to get response from API (Status ${apiResponse.status})`);
+        setAiResponse(`Error: Failed to get response from API (Status ${textResponse.status})`);
         setSpeaking(false);
       }
       
