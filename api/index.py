@@ -10,7 +10,7 @@ class handler(BaseHTTPRequestHandler):
         self.send_header('Access-Control-Allow-Credentials', 'true')
         self.send_header('Access-Control-Allow-Origin', '*')
         self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-        self.send_header('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization')
+        self.send_header('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization, Content-Type')
         self.end_headers()
         return
         
@@ -26,54 +26,63 @@ class handler(BaseHTTPRequestHandler):
             "status": "ok",
             "message": "Interview AI API is running",
             "path": self.path,
-            "environ": dict(os.environ),
-            "headers": dict(self.headers)
+            "method": self.command,
+            "vercel_url": os.environ.get('VERCEL_URL', 'Not deployed on Vercel'),
+            "now_region": os.environ.get('NOW_REGION', 'Unknown region'),
+            "environment": os.environ.get('VERCEL_ENV', 'Unknown environment')
         }
         
         self.wfile.write(json.dumps(response).encode())
         return
 
     def do_POST(self):
+        # Always respond with 200 OK for POST requests
+        self.send_response(200)
+        self.send_header('Content-type', 'application/json')
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        self.end_headers()
+        
         # Parse the path to handle different endpoints
-        parsed_path = urllib.parse.urlparse(self.path)
+        raw_path = self.path
+        parsed_path = urllib.parse.urlparse(raw_path)
         path = parsed_path.path
         
         # Get POST data
         content_length = int(self.headers.get('Content-Length', 0))
+        post_data = b'{}'
+        user_text = "No data provided"
+        
         if content_length > 0:
-            post_data = self.rfile.read(content_length)
             try:
+                post_data = self.rfile.read(content_length)
                 request_data = json.loads(post_data)
                 user_text = request_data.get('text', '')
             except Exception as e:
                 user_text = f"Error parsing JSON: {str(e)}"
-        else:
-            user_text = "No data provided"
-        
-        self.send_response(200)
-        self.send_header('Content-type', 'application/json')
-        self.send_header('Access-Control-Allow-Origin', '*')
-        self.end_headers()
         
         # Debug information
         debug_info = {
-            "received_path": self.path,
+            "raw_path": raw_path,
             "parsed_path": path,
             "method": self.command,
-            "headers": dict(self.headers),
             "content_length": content_length,
-            "user_text": user_text
+            "user_text": user_text,
+            "post_data_received": post_data.decode('utf-8', errors='replace') if content_length > 0 else "No data",
+            "vercel_url": os.environ.get('VERCEL_URL', 'Not on Vercel'),
+            "request_headers": dict(self.headers)
         }
         
-        # Check which endpoint was accessed - handling various path formats
-        if path == '/api/text' or path.startswith('/api/text/'):
+        # Handle different endpoints with better path matching
+        if path == '/api/text' or path == '/api/text/' or path.startswith('/api/text?'):
             response = {
-                "response": f"This is a test response from the API for input: {user_text}. Actual AI integration will be added after deployment works.",
+                "response": f"API response for: {user_text}",
                 "debug": debug_info
             }
-        elif path == '/api/voice' or path.startswith('/api/voice/'):
+        elif path == '/api/voice' or path == '/api/voice/' or path.startswith('/api/voice?'):
             response = {
-                "response": f"This is a voice response from the API for input: {user_text}. Voice functionality will be added later.",
+                "response": f"Voice response for: {user_text}",
                 "debug": debug_info
             }
         else:

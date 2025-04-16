@@ -89,16 +89,35 @@ function App() {
     
     // Get current domain to handle different deployments
     const apiBase = window.location.origin;
+    const apiUrl = `${apiBase}/api/text`;
     
     try {
       console.log('Sending request to API with text:', text);
-      console.log('Using API URL:', `${apiBase}/api/text`);
+      console.log('Using API URL:', apiUrl);
       
-      // First get text response for immediate feedback
-      const textResponse = await fetch(`${apiBase}/api/text`, {
+      // First send an OPTIONS request for CORS preflight
+      console.log('Sending OPTIONS preflight...');
+      try {
+        await fetch(apiUrl, {
+          method: 'OPTIONS',
+          headers: {
+            'Origin': window.location.origin,
+            'Access-Control-Request-Method': 'POST',
+            'Access-Control-Request-Headers': 'Content-Type'
+          }
+        });
+        console.log('OPTIONS preflight completed');
+      } catch (preflightError) {
+        console.log('OPTIONS preflight failed, continuing anyway:', preflightError);
+        // Continue anyway as browser may handle this automatically
+      }
+      
+      // Then send the actual POST request
+      const textResponse = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Origin': window.location.origin
         },
         body: JSON.stringify({ text })
       });
@@ -111,14 +130,25 @@ function App() {
         
         if (jsonData.response) {
           setAiResponse(jsonData.response);
+          
+          // Use browser's speech synthesis
+          if ('speechSynthesis' in window) {
+            const utterance = new SpeechSynthesisUtterance(jsonData.response);
+            utterance.onend = () => setSpeaking(false);
+            window.speechSynthesis.speak(utterance);
+          } else {
+            setSpeaking(false);
+          }
         } else if (jsonData.error) {
           console.error('Error from API:', jsonData.error);
           setAiResponse(`Error: ${jsonData.error}`);
           setError(`API Error: ${jsonData.error}`);
+          setSpeaking(false);
         } else {
           console.error('No response field in JSON data');
           setAiResponse('Error: Could not retrieve response from API');
           setError('The API returned an unexpected response format');
+          setSpeaking(false);
         }
       } else {
         console.error(`Failed to get text response: ${textResponse.status}`);
@@ -132,35 +162,16 @@ function App() {
         }
         setAiResponse(`Error: Failed to get response from API (Status ${textResponse.status})`);
         setSpeaking(false);
-        setIsWaiting(false);
-        return;
-      }
-      
-      // For now, skip voice response since we've changed the API structure
-      // Just use the text response and browser's speech synthesis
-      if ('speechSynthesis' in window && aiResponse) {
-        const utterance = new SpeechSynthesisUtterance(aiResponse);
-        utterance.onend = () => setSpeaking(false);
-        window.speechSynthesis.speak(utterance);
-      } else {
-        setSpeaking(false);
       }
       
       // Mark as no longer waiting
       setIsWaiting(false);
     } catch (error) {
-      console.error('Error in fetch operation:', error);
+      console.error('Network error in fetch operation:', error);
       setSpeaking(false);
       setError(`Network error: ${error.message}`);
       setAiResponse(prevResponse => prevResponse || 'Error: ' + error.message);
       setIsWaiting(false);
-      
-      // Fallback to browser's speech synthesis in case of error
-      if ('speechSynthesis' in window && aiResponse) {
-        const utterance = new SpeechSynthesisUtterance(aiResponse);
-        utterance.onend = () => setSpeaking(false);
-        window.speechSynthesis.speak(utterance);
-      }
     }
   };
 
