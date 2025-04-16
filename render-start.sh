@@ -3,6 +3,8 @@
 
 # Set environment variables
 export SERVE_STATIC=true
+export FLASK_ENV=production
+export PYTHONUNBUFFERED=1  # This ensures logs are output immediately
 
 # Install dependencies again as a safeguard
 echo "==> Installing required packages..."
@@ -13,10 +15,19 @@ echo "==> Python version: $(python --version)"
 echo "==> Installed packages:"
 pip list | grep -E 'flask|werkzeug|kokoro|google-generativeai'
 
-# Create a simple bootstrap script
+# Check that static files exist
+echo "==> Checking for React build files:"
+ls -la ./my-voice-assistant/build
+ls -la ./my-voice-assistant/build/static || echo "WARNING: No static directory found!"
+
+# Create a more robust bootstrap script
 cat > bootstrap.py << 'EOF'
 import os
 import sys
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Test import dependencies
 try:
@@ -25,27 +36,27 @@ try:
     import kokoro
     import google.generativeai as genai
     
-    print(f"==> Flask version: {flask.__version__}")
-    print(f"==> Werkzeug version: {werkzeug.__version__}")
-    print(f"==> Kokoro imported successfully")
-    print(f"==> Google Generative AI imported successfully")
+    logger.info(f"Flask version: {flask.__version__}")
+    logger.info(f"Werkzeug version: {werkzeug.__version__}")
+    logger.info("Kokoro imported successfully")
+    logger.info("Google Generative AI imported successfully")
 except ImportError as e:
-    print(f"==> IMPORT ERROR: {e}")
+    logger.error(f"IMPORT ERROR: {e}")
     sys.exit(1)
 
 # Then try to import our app
 try:
     from backend.app import app
-    print("==> Successfully imported app")
+    logger.info("Successfully imported app")
 except Exception as e:
-    print(f"==> APP IMPORT ERROR: {e}")
+    logger.error(f"APP IMPORT ERROR: {e}")
     raise
 
 # Start the server
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
-    print(f"==> Starting server on port {port}")
-    app.run(host='0.0.0.0', port=port)
+    logger.info(f"Starting server on port {port}")
+    app.run(host='0.0.0.0', port=port, debug=False)
 EOF
 
 # Run the bootstrap script
