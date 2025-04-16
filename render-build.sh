@@ -5,20 +5,10 @@ set -o errexit
 # Initial setup
 echo "==> Running build script..."
 
-# Clean up unnecessary files to save space
-echo "==> Initial cleanup to save storage space..."
-rm -rf .git .github __pycache__ *.log *.gz
-find . -name "__pycache__" -type d -exec rm -rf {} +
-find . -name "*.pyc" -delete
-find . -name "*.pyo" -delete
-find . -name "*.pyd" -delete
-find . -name ".DS_Store" -delete
-du -sh .
-
 # Python packages - fresh setup
-echo "==> Setting up Python environment (minimal installation)..."
+echo "==> Setting up Python environment..."
 pip install --upgrade pip
-pip install --no-cache-dir flask==2.2.3 werkzeug==2.2.3 flask-cors==3.0.10 google-generativeai==0.3.1 kokoro==0.9.4
+pip install flask==2.2.3 werkzeug==2.2.3 flask-cors==3.0.10 google-generativeai==0.3.1 gunicorn==20.1.0 kokoro==0.9.4
 
 # Print installed packages for debugging
 echo "==> Installed packages:"
@@ -27,15 +17,9 @@ pip list
 # Install node and build the frontend
 echo "==> Building frontend..."
 cd my-voice-assistant
-npm install --no-optional
+npm install
 npm run build
-# Clean up node_modules to save space
-rm -rf node_modules
 cd ..
-
-# Final cleanup
-echo "==> Final cleanup to save space..."
-rm -rf myenv venv StyleTTS2 .vercel
 
 # Create the startup script
 cat > start.sh << 'EOF'
@@ -47,18 +31,21 @@ export FLASK_APP=backend/app.py
 cat > server.py << 'EOSPY'
 import os
 import sys
-import logging
 
-logging.basicConfig(level=logging.INFO)
-logging.info("Starting application server...")
-
-# Import the app
+# Check if required modules are available
 try:
-    from backend.app import app
-    print("==> Successfully imported app")
-except Exception as e:
+    import flask
+    import werkzeug
+    import kokoro
+    print(f"==> Flask version: {flask.__version__}")
+    print(f"==> Werkzeug version: {werkzeug.__version__}")
+    print(f"==> Kokoro imported successfully")
+except ImportError as e:
     print(f"==> ERROR: {e}")
     sys.exit(1)
+
+# Import the app
+from backend.app import app
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
@@ -71,8 +58,5 @@ python server.py
 EOF
 
 chmod +x start.sh
-
-echo "==> Final disk usage:"
-du -sh .
 
 echo "==> Build completed!" 

@@ -4,33 +4,19 @@
 # Set environment variables
 export SERVE_STATIC=true
 
-# Clean up unnecessary files to save space
-echo "==> Cleaning up to save storage space..."
-rm -rf .git .github __pycache__ *.log *.gz
-find . -name "__pycache__" -type d -exec rm -rf {} +
-find . -name "*.pyc" -delete
-find . -name "*.pyo" -delete
-find . -name "*.pyd" -delete
-find . -name ".DS_Store" -delete
-du -sh .
-
-# Install dependencies - only what's needed
+# Install dependencies again as a safeguard
 echo "==> Installing required packages..."
 pip install flask==2.2.3 werkzeug==2.2.3 flask-cors==3.0.10 google-generativeai==0.3.1 kokoro==0.9.4
 
 # Print debug information
 echo "==> Python version: $(python --version)"
-echo "==> Disk usage after cleanup:"
-du -sh . /tmp
+echo "==> Installed packages:"
+pip list | grep -E 'flask|werkzeug|kokoro|google-generativeai'
 
 # Create a simple bootstrap script
 cat > bootstrap.py << 'EOF'
 import os
 import sys
-import logging
-
-logging.basicConfig(level=logging.INFO)
-logging.info("Starting application bootstrap...")
 
 # Test import dependencies
 try:

@@ -5,13 +5,12 @@ import logging
 import os
 import json
 import kokoro
-import io
 
 # Check if we're serving static files too (combined deployment)
 SERVE_STATIC = os.environ.get("SERVE_STATIC", "False").lower() in ("true", "1", "t")
-static_folder = os.path.abspath("../my-voice-assistant/build") if SERVE_STATIC else None
+static_folder = "../my-voice-assistant/build" if SERVE_STATIC else None
 
-app = Flask(__name__, static_folder=static_folder, static_url_path='')
+app = Flask(__name__, static_folder=static_folder)
 CORS(app, resources={r"/*": {"origins": "*"}})
 logging.basicConfig(level=logging.INFO)
 
@@ -19,9 +18,6 @@ logging.basicConfig(level=logging.INFO)
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "AIzaSyDrxMRoQ-Knm7gM_6YNHAiPhXoC6HN09S4")
 genai.configure(api_key=GEMINI_API_KEY)
 model = genai.GenerativeModel('gemini-1.5-flash')
-
-# Initialize kokoro for voice
-pipeline = kokoro.KPipeline(lang_code='a')  # Basic initialization
 
 @app.route('/health')
 def health():
@@ -41,27 +37,12 @@ def serve_static(path):
         if path.startswith('api/'):
             # Don't try to serve API calls as static files
             return jsonify({"error": "Not found"}), 404
-        
-        # Try to serve the file directly
-        try:
+        elif os.path.exists(os.path.join(app.static_folder, path)):
             return send_from_directory(app.static_folder, path)
-        except:
-            # Return index.html for client-side routing on 404
+        else:
+            # Return index.html for client-side routing
             return send_from_directory(app.static_folder, 'index.html')
-    
     return jsonify({"error": "Not found"}), 404
-
-def process_voice(text):
-    """Process text to voice using kokoro"""
-    try:
-        generator = pipeline(text, voice='af_heart')
-        audio_chunks = []
-        for _, _, audio in generator:
-            audio_chunks.append(audio)
-        return b''.join(audio_chunks) if audio_chunks else None
-    except Exception as e:
-        logging.error(f"Error in voice processing: {e}")
-        return None
 
 @app.route('/api/text', methods=['POST', 'OPTIONS'])
 def text_response():
@@ -95,41 +76,6 @@ def text_response():
     
     except Exception as e:
         logging.error(f"Error in text response: {e}")
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-@app.route('/api/voice', methods=['POST', 'OPTIONS'])
-def voice_response():
-    # Handle preflight requests
-    if request.method == 'OPTIONS':
-        return _build_cors_preflight_response()
-    
-    try:
-        data = request.get_json()
-        if not data:
-            return jsonify({"status": "error", "message": "No data provided"}), 400
-        
-        user_input = data.get('text', '')
-        
-        if not user_input:
-            return jsonify({"status": "error", "message": "No input text provided"}), 400
-        
-        # Generate text response
-        prompt = f"""
-        Respond to: {user_input}
-        Important: Provide your response as a continuous paragraph without line breaks or bullet points.
-        Keep punctuation minimal, using mostly commas and periods. Your response must be concise and strictly limited to a maximum of 30 words. Remember you're an 
-        interviewer. Ask the questions, and provide feedback after hearing the response from the user.
-        """
-        
-        response_text = model.generate_content(prompt).text
-        response_text = ' '.join(response_text.split())
-        
-        # For quick testing, just return text response rather than voice
-        # This avoids any complex audio processing until we confirm the endpoint works
-        return jsonify({"status": "success", "response": response_text, "message": "Voice endpoint reached"})
-        
-    except Exception as e:
-        logging.error(f"Error in voice response: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route('/api/login', methods=['POST', 'OPTIONS'])
