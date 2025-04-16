@@ -6,14 +6,21 @@ import os
 import json
 import io
 
+# Set up logging
+logging.basicConfig(level=logging.INFO, 
+                   format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
 # Import Kokoro only if it's available
 try:
-    from kokoro import KPipeline
+    import kokoro
+    logger.info(f"Successfully imported Kokoro v{kokoro.__version__}")
     kokoro_available = True
     pipeline = None  # Initialize as None, create only when needed
-except ImportError:
+except ImportError as e:
     kokoro_available = False
-    print("WARNING: Kokoro TTS not available, voice endpoints will return text-only responses")
+    logger.warning(f"Kokoro TTS not available: {e}")
+    logger.warning("Voice endpoints will return text-only responses")
 
 # Check if we're serving static files too (combined deployment)
 SERVE_STATIC = os.environ.get("SERVE_STATIC", "False").lower() in ("true", "1", "t")
@@ -21,7 +28,6 @@ static_folder = "../my-voice-assistant/build" if SERVE_STATIC else None
 
 app = Flask(__name__, static_folder=static_folder)
 CORS(app, resources={r"/*": {"origins": "*"}})
-logging.basicConfig(level=logging.INFO)
 
 # Initialize Gemini API with API key from environment
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "AIzaSyDrxMRoQ-Knm7gM_6YNHAiPhXoC6HN09S4")
@@ -33,10 +39,15 @@ def init_kokoro():
     global pipeline, kokoro_available
     if kokoro_available and pipeline is None:
         try:
-            pipeline = KPipeline(lang_code='a')  # Basic initialization
+            # For Kokoro 0.9.4, we need to import and use differently
+            from kokoro import TTSEngine
+            
+            # Initialize the engine
+            pipeline = TTSEngine()
+            logger.info("Successfully initialized Kokoro TTS Engine")
             return True
         except Exception as e:
-            logging.error(f"Failed to initialize Kokoro: {e}")
+            logger.error(f"Failed to initialize Kokoro: {e}")
             kokoro_available = False
             return False
     return kokoro_available
@@ -44,32 +55,33 @@ def init_kokoro():
 def generate_speech(text):
     """Generate speech from text using Kokoro if available"""
     if not init_kokoro():
+        logger.warning("Kokoro not initialized, returning None")
         return None
     
     try:
         import soundfile as sf
         import numpy as np
         
-        # Generate audio using Kokoro
-        audio_chunks = []
-        generator = pipeline(text, voice='af_heart')
-        for _, _, audio in generator:
-            if audio is not None:
-                audio_chunks.append(audio)
+        logger.info(f"Generating speech for text: {text[:30]}...")
         
-        if not audio_chunks:
+        # Generate audio using Kokoro 0.9.4 API
+        audio = pipeline.tts(text)
+        
+        if audio is None or len(audio) == 0:
+            logger.warning("No audio generated")
             return None
             
-        # Combine audio chunks
-        combined_audio = np.concatenate(audio_chunks)
-        
         # Convert to WAV format in memory
         buffer = io.BytesIO()
-        sf.write(buffer, combined_audio, 24000, format='WAV')
+        sf.write(buffer, audio, 24000, format='WAV')
         buffer.seek(0)
+        
+        logger.info(f"Successfully generated audio of size: {len(buffer.getvalue())} bytes")
         return buffer.read()
     except Exception as e:
-        logging.error(f"Error generating speech: {e}")
+        logger.error(f"Error generating speech: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         return None
 
 @app.route('/health')
@@ -123,12 +135,14 @@ def text_response():
         response_text = model.generate_content(prompt).text
         response_text = ' '.join(response_text.split())
         
-        logging.info(f"Generated response: {response_text}")
+        logger.info(f"Generated response: {response_text}")
         
         return jsonify({"status": "success", "response": response_text})
     
     except Exception as e:
-        logging.error(f"Error in text response: {e}")
+        logger.error(f"Error in text response: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route('/api/voice', methods=['POST', 'OPTIONS'])
@@ -157,22 +171,32 @@ def voice_response():
         response_text = model.generate_content(prompt).text
         response_text = ' '.join(response_text.split())
         
-        logging.info(f"Generated response: {response_text}")
+        logger.info(f"Generated response: {response_text}")
         
         # Check if Kokoro is available
         if kokoro_available:
+            logger.info("Kokoro is available, generating audio")
             audio_data = generate_speech(response_text)
             if audio_data:
                 # Return audio with text in header
+                logger.info("Audio generated successfully, returning response")
                 response = Response(audio_data, mimetype='audio/wav')
                 response.headers['X-Response-Text'] = response_text
+                response.headers['Access-Control-Allow-Origin'] = '*'
+                response.headers['Access-Control-Expose-Headers'] = 'X-Response-Text'
                 return response
+            else:
+                logger.warning("Audio generation failed, falling back to text")
+        else:
+            logger.warning("Kokoro not available, returning text response")
         
         # Fallback to text response if TTS fails or isn't available
         return jsonify({"status": "success", "response": response_text})
     
     except Exception as e:
-        logging.error(f"Error in voice response: {e}")
+        logger.error(f"Error in voice response: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route('/api/login', methods=['POST', 'OPTIONS'])
@@ -206,7 +230,7 @@ def login():
             }), 401
     
     except Exception as e:
-        logging.error(f"Error in login: {e}")
+        logger.error(f"Error in login: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
 def _build_cors_preflight_response():
@@ -214,6 +238,7 @@ def _build_cors_preflight_response():
     response.headers.add("Access-Control-Allow-Origin", "*")
     response.headers.add("Access-Control-Allow-Headers", "Content-Type,Authorization")
     response.headers.add("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
+    response.headers.add("Access-Control-Expose-Headers", "X-Response-Text")
     return response
 
 if __name__ == '__main__':
