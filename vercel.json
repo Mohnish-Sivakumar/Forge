@@ -10,12 +10,13 @@
   ],
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/index.py" },
+    { "source": "/server/(.*)", "destination": "/api/index.py" },
     { "source": "/api-test", "destination": "/api/test.html" },
     { "source": "/(.*)", "destination": "/my-voice-assistant/build/index.html" }
   ],
   "headers": [
     {
-      "source": "/api/(.*)",
+      "source": "/(api|server)/(.*)",
       "headers": [
         { "key": "Access-Control-Allow-Credentials", "value": "true" },
         { "key": "Access-Control-Allow-Origin", "value": "*" },
