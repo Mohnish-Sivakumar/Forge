@@ -1,9 +1,10 @@
 {
-  "name": "forge",
+  "name": "interview-ai",
   "private": true,
   "scripts": {
     "build": "cd my-voice-assistant && npm install && npm run build",
-    "start": "./run.sh"
+    "start": "./run.sh",
+    "dev": "./run_local.sh"
   },
   "engines": {
     "node": "18.x",
