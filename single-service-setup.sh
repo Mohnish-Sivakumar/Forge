@@ -38,6 +38,7 @@ cat > run.sh << EOL
 
 # Export environment variables
 export SERVE_STATIC=true
+export PYTHON_VERSION=3.12.9
 
 # Start the app
 gunicorn backend.app:app --bind 0.0.0.0:\$PORT
@@ -50,7 +51,7 @@ echo "✅ Created run.sh"
 cat > .env << EOL
 # Environment variables
 SERVE_STATIC=true
-PYTHON_VERSION=3.9
+PYTHON_VERSION=3.12.9
 NODE_VERSION=18
 EOL
 
@@ -67,7 +68,7 @@ echo "   - Start Command: ./run.sh"
 echo "   - Environment Variables:"
 echo "     - SERVE_STATIC: true"
 echo "     - GEMINI_API_KEY: [your API key]"
-echo "     - PYTHON_VERSION: 3.9"
+echo "     - PYTHON_VERSION: 3.12.9"
 echo "     - NODE_VERSION: 18"
 echo ""
 echo "This will deploy a single service containing both frontend and backend!" 

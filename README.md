@@ -54,7 +54,7 @@ The easiest way to deploy this application is using the `render.yaml` Blueprint:
    - **Start Command**: `gunicorn backend.app:app --bind 0.0.0.0:$PORT`
    - **Instance Type**: Free
    - **Environment Variables**:
-     - `PYTHON_VERSION`: 3.9
+     - `PYTHON_VERSION`: 3.12.9
      - `GEMINI_API_KEY`: Your Google Gemini API key
 
 ### Alternative Option: Single Service Deployment
@@ -78,7 +78,7 @@ Make sure to set the following environment variables in Render:
 
 - `GEMINI_API_KEY`: Your Google Gemini API key
 - `NODE_VERSION`: 18 (for the frontend)
-- `PYTHON_VERSION`: 3.9 (for the backend)
+- `PYTHON_VERSION`: 3.12.9 (for the backend)
 
 ## Local Development
 
