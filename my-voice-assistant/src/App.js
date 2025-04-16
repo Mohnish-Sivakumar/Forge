@@ -87,37 +87,18 @@ function App() {
     // Stop any ongoing audio playback
     stopAudioPlayback();
     
-    // Get current domain to handle different deployments
-    const apiBase = window.location.origin;
-    const apiUrl = `${apiBase}/api/text`;
+    // Use a relative URL path instead of a full URL
+    const apiUrl = '/api/text';
     
     try {
       console.log('Sending request to API with text:', text);
       console.log('Using API URL:', apiUrl);
       
-      // First send an OPTIONS request for CORS preflight
-      console.log('Sending OPTIONS preflight...');
-      try {
-        await fetch(apiUrl, {
-          method: 'OPTIONS',
-          headers: {
-            'Origin': window.location.origin,
-            'Access-Control-Request-Method': 'POST',
-            'Access-Control-Request-Headers': 'Content-Type'
-          }
-        });
-        console.log('OPTIONS preflight completed');
-      } catch (preflightError) {
-        console.log('OPTIONS preflight failed, continuing anyway:', preflightError);
-        // Continue anyway as browser may handle this automatically
-      }
-      
       // Then send the actual POST request
       const textResponse = await fetch(apiUrl, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'Origin': window.location.origin
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({ text })
       });

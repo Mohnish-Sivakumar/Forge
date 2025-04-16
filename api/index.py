@@ -21,15 +21,18 @@ class handler(BaseHTTPRequestHandler):
         self.send_header('Access-Control-Allow-Origin', '*')
         self.end_headers()
         
+        origin = self.headers.get('Origin', 'No origin header')
+        host = self.headers.get('Host', 'No host header')
+        
         # For debugging purposes
         response = {
             "status": "ok",
             "message": "Interview AI API is running",
             "path": self.path,
             "method": self.command,
-            "vercel_url": os.environ.get('VERCEL_URL', 'Not deployed on Vercel'),
-            "now_region": os.environ.get('NOW_REGION', 'Unknown region'),
-            "environment": os.environ.get('VERCEL_ENV', 'Unknown environment')
+            "client_origin": origin,
+            "server_host": host,
+            "custom_flag": os.environ.get('USE_CUSTOM_URLS', 'Not set')
         }
         
         self.wfile.write(json.dumps(response).encode())
@@ -62,6 +65,10 @@ class handler(BaseHTTPRequestHandler):
             except Exception as e:
                 user_text = f"Error parsing JSON: {str(e)}"
         
+        # Get origin information from headers
+        origin = self.headers.get('Origin', 'No origin header')
+        host = self.headers.get('Host', 'No host header')
+        
         # Debug information
         debug_info = {
             "raw_path": raw_path,
@@ -69,9 +76,8 @@ class handler(BaseHTTPRequestHandler):
             "method": self.command,
             "content_length": content_length,
             "user_text": user_text,
-            "post_data_received": post_data.decode('utf-8', errors='replace') if content_length > 0 else "No data",
-            "vercel_url": os.environ.get('VERCEL_URL', 'Not on Vercel'),
-            "request_headers": dict(self.headers)
+            "client_origin": origin,
+            "server_host": host
         }
         
         # Handle different endpoints with better path matching
