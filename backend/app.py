@@ -4,6 +4,7 @@ import google.generativeai as genai
 import logging
 import os
 import json
+import kokoro
 
 # Check if we're serving static files too (combined deployment)
 SERVE_STATIC = os.environ.get("SERVE_STATIC", "False").lower() in ("true", "1", "t")
