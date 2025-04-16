@@ -1,6 +1,20 @@
 import React, { useState, useRef } from 'react';
 import './App.css';
 
+// Determine the base API URL based on environment
+const getApiBaseUrl = () => {
+  // Check if we're running locally or in a Render production environment
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    return '/api';  // For local development with proxy
+  } else {
+    // For production - this assumes the API URL will be provided via environment or configuration
+    // This might need to be updated with your actual Render API URL
+    return `${window.location.protocol}//${window.location.hostname.replace('forge-frontend', 'forge-api')}/api`;
+  }
+};
+
+const API_BASE_URL = getApiBaseUrl();
+
 function App() {
   const [listening, setListening] = useState(false);
   const [speaking, setSpeaking] = useState(false);
@@ -87,8 +101,8 @@ function App() {
     // Stop any ongoing audio playback
     stopAudioPlayback();
     
-    // Use a relative URL path instead of a full URL
-    const apiUrl = '/api/text';
+    // Use the calculated API URL
+    const apiUrl = `${API_BASE_URL}/text`;
     
     try {
       console.log('Sending request to API with text:', text);
@@ -137,7 +151,7 @@ function App() {
         try {
           const errorData = await textResponse.json();
           console.log('Error response:', errorData);
-          setError(`API Error (${textResponse.status}): ${errorData.response || 'Unknown error'}`);
+          setError(`API Error (${textResponse.status}): ${errorData.message || 'Unknown error'}`);
         } catch {
           setError(`API Error: The server returned status ${textResponse.status}`);
         }

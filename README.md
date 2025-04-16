@@ -1,43 +1,74 @@
-# Interview AI
+# Interview AI - Render Deployment
 
-A voice-based interview practice assistant built with React and Python.
+A voice-based interview practice assistant built with React and Python Flask.
 
-## Deployment Instructions
+## Deployment Instructions for Render
 
-### Vercel Deployment Settings
+This application consists of two services that need to be deployed on Render:
 
-When deploying to Vercel, follow these steps to avoid URL inconsistency issues:
+1. **Frontend**: A static React application
+2. **Backend**: A Python Flask API 
 
-1. **Disable automatic system environment variables**:
-   - Go to your project settings in Vercel
-   - Navigate to the "Environment Variables" section
-   - Uncheck "Automatically expose System Environment Variables"
-   
-2. **Set a custom VERCEL_URL variable**:
-   - In the same Environment Variables section, add a new variable:
-   - Name: `VERCEL_URL`
-   - Value: Your actual deployment URL (e.g., `forge-seven-theta.vercel.app`)
-   - Select all environments (Production, Preview, Development)
+### Option 1: Using render.yaml (Recommended)
 
-3. **Set the USE_CUSTOM_URLS flag**:
-   - Add another environment variable:
-   - Name: `USE_CUSTOM_URLS`
-   - Value: `true`
-   - Select all environments
+The easiest way to deploy this application is using the `render.yaml` Blueprint:
 
-This configuration prevents issues with different URLs being generated for the same deployment, which can cause CORS and API request problems.
+1. Fork or clone this repository to your GitHub account
+2. Create a new Render account if you don't have one
+3. Go to the Render Dashboard and click on "New Blueprint"
+4. Connect your GitHub repository
+5. Render will automatically detect the `render.yaml` file
+6. Complete the deployment by filling in the required environment variables
+
+### Option 2: Manual Deployment
+
+#### Frontend Deployment
+
+1. Go to the Render Dashboard and select "Static Site"
+2. Connect your GitHub repository
+3. Use the following settings:
+   - **Name**: forge-frontend
+   - **Build Command**: `cd my-voice-assistant && npm install && npm run build`
+   - **Publish Directory**: `my-voice-assistant/build`
+
+#### Backend Deployment  
+
+1. Go to the Render Dashboard and select "Web Service"
+2. Connect your GitHub repository
+3. Use the following settings:
+   - **Name**: forge-api
+   - **Environment**: Python
+   - **Build Command**: `pip install -r requirements-render.txt`
+   - **Start Command**: `gunicorn backend.app:app --bind 0.0.0.0:$PORT`
+   - **Environment Variables**:
+     - `PYTHON_VERSION`: 3.9
+     - `GEMINI_API_KEY`: Your Google Gemini API key
+
+## Environment Setup
+
+Make sure to set the following environment variables in Render:
+
+- `GEMINI_API_KEY`: Your Google Gemini API key
+- `NODE_VERSION`: 18 (for the frontend)
+- `PYTHON_VERSION`: 3.9 (for the backend)
 
 ## Local Development
-
-Run the application locally:
 
 ```bash
 # Install dependencies
 npm install
 
-# Start the development server
+# Start development server
 npm run dev
 ```
+
+This will start the React frontend on port 3000 and the Flask backend on port 5001.
+
+## API Endpoints
+
+- `GET /api/health` - Health check endpoint
+- `POST /api/text` - Text generation endpoint
+- `POST /api/login` - Test login endpoint (username: test, password: password)
 
 ## Project Structure
 

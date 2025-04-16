@@ -3,18 +3,18 @@
   "private": true,
   "scripts": {
     "build": "cd my-voice-assistant && npm install && npm run build",
-    "postinstall": "mkdir -p public && cp -r my-voice-assistant/build/* public/ || true",
-    "test-api": "curl -v http://localhost:3000/api/text",
-    "test-api-post": "curl -v -X POST -H 'Content-Type: application/json' -d '{\"text\":\"Test message\"}' http://localhost:3000/api/text"
+    "start": "cd backend && gunicorn app:app --bind 0.0.0.0:$PORT",
+    "postinstall": "pip install -r requirements-render.txt",
+    "dev": "concurrently \"cd my-voice-assistant && npm start\" \"cd backend && python app.py\""
   },
   "engines": {
-    "node": ">=18.x"
+    "node": ">=18.x",
+    "npm": ">=9.x"
   },
   "dependencies": {
     "create-react-app": "^5.1.0"
   },
   "devDependencies": {
-    "concurrently": "^9.1.2",
-    "gh-pages": "^6.3.0"
+    "concurrently": "^9.1.2"
   }
 }
