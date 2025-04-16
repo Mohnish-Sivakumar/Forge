@@ -16,19 +16,34 @@
   "routes": [
     {
       "src": "/api/(.*)",
-      "dest": "/api/index.py",
-      "headers": {
-        "Access-Control-Allow-Credentials": "true",
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-        "Access-Control-Allow-Headers": "X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization"
-      }
+      "methods": ["GET", "POST", "OPTIONS"],
+      "dest": "api/index.py"
     },
-    { "src": "/static/(.*)", "dest": "my-voice-assistant/build/static/$1" },
-    { "src": "/(.+\\.\\w+)$", "dest": "my-voice-assistant/build/$1" },
-    { "handle": "filesystem" },
-    { "src": "/(.*)", "dest": "my-voice-assistant/build/index.html" }
+    {
+      "src": "/static/(.*)",
+      "dest": "my-voice-assistant/build/static/$1"
+    },
+    {
+      "src": "/(.*\\.(js|css|json|png|ico|svg))",
+      "dest": "my-voice-assistant/build/$1"
+    },
+    {
+      "handle": "filesystem"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "my-voice-assistant/build/index.html"
+    }
   ],
-  "trailingSlash": false,
-  "cleanUrls": true
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        { "key": "Access-Control-Allow-Credentials", "value": "true" },
+        { "key": "Access-Control-Allow-Origin", "value": "*" },
+        { "key": "Access-Control-Allow-Methods", "value": "GET, POST, OPTIONS" },
+        { "key": "Access-Control-Allow-Headers", "value": "X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization" }
+      ]
+    }
+  ]
 } 
