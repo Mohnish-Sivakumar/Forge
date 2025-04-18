@@ -1,21 +1,17 @@
 {
-  "name": "forge",
-  "private": true,
-  "type": "module",
+  "name": "voice-assistant-server",
+  "version": "1.0.0",
+  "description": "Express server for voice assistant application",
+  "main": "server.js",
   "scripts": {
-    "build": "cd my-voice-assistant && npm install && npm run build",
-    "start": "./run.sh",
-    "dev": "node dev.js",
-    "backend": "cd backend && python -m flask run --port=5001",
-    "frontend": "cd my-voice-assistant && npm start"
-  },
-  "engines": {
-    "node": "18.x",
-    "npm": "9.x"
+    "start": "node server.js",
+    "dev": "nodemon server.js"
   },
   "dependencies": {
-    "express": "^5.1.0",
-    "http-proxy-middleware": "^3.0.5",
-    "node-fetch": "^3.3.2"
+    "express": "^4.18.2",
+    "http-proxy-middleware": "^2.0.6"
+  },
+  "devDependencies": {
+    "nodemon": "^2.0.22"
   }
 }

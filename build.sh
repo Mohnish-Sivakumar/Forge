@@ -2,18 +2,25 @@
 # Exit on error
 set -e
 
-echo "==== Build Script Starting ===="
+echo "Starting build process..."
+
+# Set Python version
+echo "Setting up Python environment..."
+echo "python-3.9" > runtime.txt
 
 # Install Python dependencies
-echo "==> Installing Python dependencies..."
+echo "Installing Python dependencies..."
 pip install -r requirements.txt
 
-# Install and build React app
-echo "==> Building React frontend..."
+# Install Node.js dependencies for Express server
+echo "Installing root Node.js dependencies for Express server..."
+npm install
+
+# Build React app
+echo "Building React application..."
 cd my-voice-assistant
 npm install
-# Force build to continue even with warnings
-CI=false npm run build
+npm run build
 cd ..
 
 # Create a backup of the build directory at the project root
@@ -62,4 +69,4 @@ fi
 echo "==> Making scripts executable..."
 chmod +x start.sh
 
-echo "==== Build Complete ====" 
+echo "Build process completed successfully." 

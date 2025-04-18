@@ -1,23 +1,43 @@
 services:
-  # Combined service for API and frontend
+  # Express server for both static files and API proxy
   - type: web
-    name: forge-app
+    name: kokoro-voice-assistant
     env: python
     plan: free
     buildCommand: |
-      chmod +x build.sh
-      ./build.sh
+      # Install Python dependencies
+      pip install -r requirements.txt
+      
+      # Install Node.js dependencies and build React app
+      cd my-voice-assistant
+      npm install
+      npm run build
+      
+      # Move build to root directory for the Express server to find
+      cp -r build ../build
+      
+      # Install Express server dependencies in the root
+      cd ..
+      npm install express http-proxy-middleware
     startCommand: ./start.sh
     envVars:
-      - key: PYTHON_VERSION
-        value: 3.12.9
+      - key: GOOGLE_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: PYTHONUNBUFFERED
+        value: true
       - key: NODE_VERSION
-        value: 18.x
-      - key: GEMINI_API_KEY
-        sync: false # This will be filled manually in Render dashboard
-      - key: FLASK_ENV
-        value: production
-      - key: SERVE_STATIC
-        value: "true"
+        value: 18.12.1
+      - key: PYTHON_VERSION
+        value: 3.9.13
+      - key: PORT
+        value: 10000
+      - key: FLASK_PORT
+        value: 5001
       - key: LOW_MEMORY_MODE
-        value: "true" 
+        value: true
+      - key: API_URL
+        value: http://localhost:5001
+      - key: GENAI_API_KEY
+        sync: false 
