@@ -13,6 +13,18 @@ echo "==> Setting memory optimization flags..."
 find . -name "*.pyc" -delete
 find . -name "__pycache__" -type d -exec rm -rf {} +
 
+# Print some debug info about the build directory
+echo "==> Checking build directory..."
+if [ -d "my-voice-assistant/build" ]; then
+  echo "  ✅ Build directory exists"
+  ls -la my-voice-assistant/build/static
+else
+  echo "  ❌ Build directory missing! This will cause 404 errors."
+fi
+
+# Make sure we're in the right directory
+echo "==> Current directory: $(pwd)"
+
 # Start the Flask app using gunicorn with minimal workers
 echo "==> Starting with minimal gunicorn workers..."
 gunicorn backend.app:app --bind 0.0.0.0:$PORT --workers=1 --threads=2 --timeout=60 

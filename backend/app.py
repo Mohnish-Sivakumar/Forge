@@ -140,6 +140,16 @@ def debug():
         "environment": os.environ.get("FLASK_ENV", "development")
     }
     
+    # Add static files info
+    static_info = {
+        "static_folder": STATIC_FOLDER,
+        "static_folder_exists": os.path.exists(STATIC_FOLDER),
+        "index_html_exists": os.path.exists(os.path.join(STATIC_FOLDER, 'index.html')),
+        "static_dir_exists": os.path.exists(os.path.join(STATIC_FOLDER, 'static')),
+        "current_directory": os.getcwd(),
+    }
+    info["static_files"] = static_info
+    
     # Add memory info if possible
     try:
         import psutil
@@ -153,6 +163,40 @@ def debug():
         pass
     
     return jsonify(info)
+
+@app.route('/api/files', methods=['GET'])
+def list_files():
+    """List files in the build directory to help with debugging"""
+    if not SERVE_STATIC:
+        return jsonify({"error": "Static file serving is disabled"}), 404
+    
+    file_list = []
+    css_files = []
+    js_files = []
+    
+    # Check if build directory exists
+    if os.path.exists(STATIC_FOLDER):
+        # List main directory
+        file_list = os.listdir(STATIC_FOLDER)
+        
+        # List CSS files
+        css_path = os.path.join(STATIC_FOLDER, 'static', 'css')
+        if os.path.exists(css_path):
+            css_files = os.listdir(css_path)
+            
+        # List JS files
+        js_path = os.path.join(STATIC_FOLDER, 'static', 'js')
+        if os.path.exists(js_path):
+            js_files = os.listdir(js_path)
+    
+    return jsonify({
+        "build_dir": STATIC_FOLDER,
+        "exists": os.path.exists(STATIC_FOLDER),
+        "files": file_list,
+        "css_files": css_files,
+        "js_files": js_files,
+        "cwd": os.getcwd()
+    })
 
 @app.route('/')
 def home():
@@ -173,14 +217,28 @@ def serve_static(path):
     if not SERVE_STATIC:
         return jsonify({"error": "Static file serving is disabled"}), 404
     
-    # Handle React routing
-    if path.startswith('static/') or path in ['favicon.ico', 'manifest.json', 'logo192.png', 'logo512.png']:
-        if os.path.exists(os.path.join(STATIC_FOLDER, path)):
+    # Special case for static files (CSS, JS, media)
+    if path.startswith('static/'):
+        file_path = os.path.join(STATIC_FOLDER, path)
+        if os.path.exists(file_path):
             return send_from_directory(STATIC_FOLDER, path)
         return '', 404
+
+    # Handle common assets
+    if path in ['favicon.ico', 'manifest.json', 'logo192.png', 'logo512.png', 'robots.txt']:
+        return send_from_directory(STATIC_FOLDER, path)
     
     # Return index.html for all other routes to support React Router
     return send_from_directory(STATIC_FOLDER, 'index.html')
+
+# Add a specific route for static directory
+@app.route('/static/<path:filename>')
+def serve_static_dir(filename):
+    """
+    Specific handler for /static/ URLs
+    This is critical for serving React's JS and CSS files
+    """
+    return send_from_directory(os.path.join(STATIC_FOLDER, 'static'), filename)
 
 @app.route('/api/text', methods=['POST', 'OPTIONS'])
 def text_response():
@@ -333,6 +391,36 @@ def login():
         "status": "error",
         "message": "Invalid username or password"
     }), 401
+
+@app.route('/check/<path:file_path>')
+def check_file(file_path):
+    """
+    Endpoint to check if a specific file exists and serve it
+    This helps diagnose file serving issues
+    """
+    # Check if file exists directly in the STATIC_FOLDER
+    direct_path = os.path.join(STATIC_FOLDER, file_path)
+    if os.path.isfile(direct_path):
+        return send_from_directory(STATIC_FOLDER, file_path)
+    
+    # If not found directly, try to serve it from where it should be
+    if file_path.startswith('static/'):
+        # Get the relative path from STATIC_FOLDER
+        rel_path = file_path
+        if os.path.isfile(os.path.join(STATIC_FOLDER, rel_path)):
+            return send_from_directory(STATIC_FOLDER, rel_path)
+    
+    # If file not found, return diagnostic info
+    return jsonify({
+        "error": "File not found",
+        "requested_path": file_path,
+        "full_path": direct_path,
+        "static_folder": STATIC_FOLDER,
+        "exists": os.path.exists(direct_path),
+        "is_file": os.path.isfile(direct_path),
+        "parent_dir_exists": os.path.exists(os.path.dirname(direct_path)),
+        "cwd": os.getcwd()
+    }), 404
 
 def _build_cors_preflight_response():
     # Get the Origin from the request headers
