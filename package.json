@@ -1,12 +1,21 @@
 {
   "name": "forge",
   "private": true,
+  "type": "module",
   "scripts": {
     "build": "cd my-voice-assistant && npm install && npm run build",
-    "start": "./run.sh"
+    "start": "./run.sh",
+    "dev": "node dev.js",
+    "backend": "cd backend && python -m flask run --port=5001",
+    "frontend": "cd my-voice-assistant && npm start"
   },
   "engines": {
     "node": "18.x",
     "npm": "9.x"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "http-proxy-middleware": "^3.0.5",
+    "node-fetch": "^3.3.2"
   }
 }

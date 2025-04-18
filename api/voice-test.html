@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voice API Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="text"],
+        select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        .response-area {
+            margin-top: 20px;
+        }
+        .text-response {
+            padding: 15px;
+            background-color: #f9f9f9;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            white-space: pre-wrap;
+            margin-bottom: 15px;
+        }
+        .status {
+            margin-top: 10px;
+            font-style: italic;
+            color: #666;
+        }
+        .audio-controls {
+            margin-top: 15px;
+            display: flex;
+            align-items: center;
+        }
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(0,0,0,.3);
+            border-radius: 50%;
+            border-top-color: #4CAF50;
+            animation: spin 1s ease-in-out infinite;
+            margin-left: 10px;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Voice API Test</h1>
+        <p>Use this page to test the voice generation API</p>
+        
+        <div class="form-group">
+            <label for="textInput">Enter text:</label>
+            <input 
+                type="text" 
+                id="textInput" 
+                placeholder="Type something to convert to speech"
+                value="Tell me about your experience with Python programming."
+            >
+        </div>
+        
+        <div class="form-group">
+            <label for="voiceSelect">Select voice:</label>
+            <select id="voiceSelect">
+                <option value="default">Default English Voice</option>
+                <option value="female1">Female Voice 1</option>
+                <option value="female2">Emotional Female</option>
+                <option value="male1">Narrative Male</option>
+                <option value="male2">Conversational Male</option>
+                <option value="british">British English</option>
+                <option value="australian">Australian English</option>
+            </select>
+        </div>
+        
+        <button id="generateBtn" onclick="generateVoice()">Generate Voice</button>
+        
+        <div class="response-area">
+            <h3>Response:</h3>
+            <div id="textResponse" class="text-response">Response will appear here...</div>
+            
+            <div class="audio-controls">
+                <button id="playBtn" onclick="playAudio()" disabled>Play Audio</button>
+                <span id="status" class="status"></span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let audioData = null;
+        const statusEl = document.getElementById('status');
+        const textResponseEl = document.getElementById('textResponse');
+        const generateBtn = document.getElementById('generateBtn');
+        const playBtn = document.getElementById('playBtn');
+        
+        async function generateVoice() {
+            const text = document.getElementById('textInput').value;
+            const voice = document.getElementById('voiceSelect').value;
+            
+            if (!text) {
+                alert('Please enter some text');
+                return;
+            }
+            
+            // Disable button and show loading status
+            generateBtn.disabled = true;
+            playBtn.disabled = true;
+            statusEl.innerHTML = 'Generating voice... <div class="loading"></div>';
+            textResponseEl.textContent = 'Waiting for response...';
+            
+            try {
+                const response = await fetch('/api/voice', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ text, voice })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    // Get the text response from header or JSON
+                    const textResponse = response.headers.get('X-Response-Text') || data.response || 'No text response';
+                    textResponseEl.textContent = textResponse;
+                    
+                    // Handle audio data
+                    if (data.audio) {
+                        // Store the base64 audio data
+                        audioData = data.audio;
+                        playBtn.disabled = false;
+                        statusEl.textContent = 'Voice generated successfully. Click play to listen.';
+                    } else {
+                        audioData = null;
+                        playBtn.disabled = true;
+                        statusEl.textContent = 'No audio data received.';
+                    }
+                } else {
+                    // Handle error response
+                    const errorData = await response.json();
+                    textResponseEl.textContent = `Error: ${errorData.message || 'Unknown error'}`;
+                    statusEl.textContent = 'Failed to generate voice.';
+                    audioData = null;
+                    playBtn.disabled = true;
+                }
+            } catch (error) {
+                textResponseEl.textContent = `Error: ${error.message}`;
+                statusEl.textContent = 'Network error occurred.';
+                audioData = null;
+                playBtn.disabled = true;
+            } finally {
+                generateBtn.disabled = false;
+            }
+        }
+        
+        function playAudio() {
+            if (!audioData) {
+                statusEl.textContent = 'No audio data available.';
+                return;
+            }
+            
+            // Create audio from base64 data
+            const blob = base64ToBlob(audioData, 'audio/wav');
+            const audioUrl = URL.createObjectURL(blob);
+            const audio = new Audio(audioUrl);
+            
+            // Play the audio
+            audio.onplay = () => {
+                statusEl.textContent = 'Playing audio...';
+                playBtn.disabled = true;
+            };
+            
+            audio.onended = () => {
+                statusEl.textContent = 'Playback completed.';
+                playBtn.disabled = false;
+                URL.revokeObjectURL(audioUrl);
+            };
+            
+            audio.onerror = (e) => {
+                statusEl.textContent = 'Error playing audio.';
+                playBtn.disabled = false;
+                URL.revokeObjectURL(audioUrl);
+                console.error('Audio error:', e);
+            };
+            
+            audio.play().catch(e => {
+                statusEl.textContent = `Playback error: ${e.message}`;
+                console.error('Playback error:', e);
+            });
+        }
+        
+        // Utility to convert base64 to Blob
+        function base64ToBlob(base64, mimeType) {
+            const byteString = atob(base64);
+            const arrayBuffer = new ArrayBuffer(byteString.length);
+            const int8Array = new Uint8Array(arrayBuffer);
+            
+            for (let i = 0; i < byteString.length; i++) {
+                int8Array[i] = byteString.charCodeAt(i);
+            }
+            
+            return new Blob([int8Array], { type: mimeType });
+        }
+    </script>
+</body>
+</html> 

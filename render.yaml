@@ -25,4 +25,10 @@ services:
       - key: PYTHON_VERSION
         value: 3.12.9
       - key: GEMINI_API_KEY
-        sync: false # This will be filled manually in Render dashboard 
+        sync: false # This will be filled manually in Render dashboard
+      - key: FLASK_ENV
+        value: production
+      - key: ALLOWED_ORIGINS
+        value: "https://forge-frontend.onrender.com"
+      - key: CORS_ENABLED
+        value: "true" 

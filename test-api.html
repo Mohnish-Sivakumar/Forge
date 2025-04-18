@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>API Test</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    button {
+      padding: 8px 16px;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      margin-right: 10px;
+    }
+    pre {
+      background-color: #f5f5f5;
+      padding: 15px;
+      border-radius: 4px;
+      overflow-x: auto;
+    }
+    .input-group {
+      margin-bottom: 15px;
+    }
+    input, select {
+      padding: 8px;
+      width: 300px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Interview AI API Test</h1>
+  
+  <div class="input-group">
+    <button onclick="testDebug()">Test Debug Endpoint</button>
+    <pre id="debugResult">Results will appear here...</pre>
+  </div>
+
+  <div class="input-group">
+    <label>Text to send:</label>
+    <input type="text" id="inputText" value="Help me with my interview" />
+  </div>
+
+  <div class="input-group">
+    <label>Voice:</label>
+    <select id="voiceOption">
+      <option value="default">Default</option>
+      <option value="female1">Female 1</option>
+      <option value="female2">Female Emotional</option>
+      <option value="male1">Male Narrative</option>
+      <option value="male2">Male Conversational</option>
+      <option value="british">British</option>
+      <option value="australian">Australian</option>
+    </select>
+  </div>
+
+  <div class="input-group">
+    <button onclick="testVoice()">Test Voice Endpoint</button>
+    <pre id="voiceResult">Results will appear here...</pre>
+  </div>
+
+  <script>
+    // Helper function to prettify JSON
+    function prettyJson(obj) {
+      return JSON.stringify(obj, null, 2);
+    }
+
+    // Test the debug endpoint
+    async function testDebug() {
+      const resultElem = document.getElementById('debugResult');
+      resultElem.textContent = 'Loading...';
+      
+      try {
+        const response = await fetch('/api/debug');
+        const data = await response.json();
+        resultElem.textContent = prettyJson(data);
+      } catch (error) {
+        resultElem.textContent = `Error: ${error.message}`;
+      }
+    }
+
+    // Test the voice endpoint
+    async function testVoice() {
+      const resultElem = document.getElementById('voiceResult');
+      const inputText = document.getElementById('inputText').value;
+      const voiceOption = document.getElementById('voiceOption').value;
+      
+      resultElem.textContent = 'Loading...';
+      
+      try {
+        const response = await fetch('/api/voice', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            text: inputText,
+            voice: voiceOption,
+            format: 'json'
+          })
+        });
+        
+        const data = await response.json();
+        resultElem.textContent = prettyJson(data);
+        
+        // If there's a response, speak it using browser's speech synthesis
+        if (data.response && window.speechSynthesis) {
+          const utterance = new SpeechSynthesisUtterance(data.response);
+          window.speechSynthesis.speak(utterance);
+        }
+      } catch (error) {
+        resultElem.textContent = `Error: ${error.message}`;
+      }
+    }
+  </script>
+</body>
+</html> 

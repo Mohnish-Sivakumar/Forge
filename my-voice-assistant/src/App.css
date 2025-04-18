@@ -256,3 +256,139 @@
   to { opacity: 1; }
 }
 
+/* Voice options section */
+.voice-options {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 10px;
+  margin-bottom: 15px;
+  padding: 10px;
+  background-color: rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+  width: 80%;
+  max-width: 300px;
+}
+
+.voice-options label {
+  display: flex;
+  align-items: center;
+  margin-bottom: 10px;
+  font-size: 1rem;
+  color: #444;
+  cursor: pointer;
+}
+
+.voice-options input[type="checkbox"] {
+  margin-right: 8px;
+  cursor: pointer;
+  width: 18px;
+  height: 18px;
+}
+
+.voice-selector {
+  width: 100%;
+  margin-top: 5px;
+}
+
+.voice-selector select {
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid #d3d3d3;
+  background-color: white;
+  font-size: 0.9rem;
+  color: #333;
+  cursor: pointer;
+  outline: none;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  transition: all 0.2s ease;
+}
+
+.voice-selector select:hover {
+  border-color: #b39ddb;
+}
+
+.voice-selector select:focus {
+  border-color: #7e57c2;
+  box-shadow: 0 0 0 2px rgba(126, 87, 194, 0.2);
+}
+
+.voice-selector select:disabled {
+  background-color: #f5f5f5;
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+/* Enhance the AI response text */
+.ai-response-text {
+  padding: 15px;
+  font-size: 1.1rem;
+  color: #333;
+  max-height: 200px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(126, 87, 194, 0.5) transparent;
+}
+
+.ai-response-text::-webkit-scrollbar {
+  width: 6px;
+}
+
+.ai-response-text::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.ai-response-text::-webkit-scrollbar-thumb {
+  background-color: rgba(126, 87, 194, 0.5);
+  border-radius: 6px;
+}
+
+/* Ensure responsive design */
+@media (max-width: 768px) {
+  .voice-options {
+    width: 90%;
+  }
+  
+  .blob {
+    width: 250px;
+    height: 250px;
+  }
+  
+  .blob-inner {
+    width: 200px;
+    height: 200px;
+  }
+}
+
+@media (max-width: 480px) {
+  .voice-options {
+    width: 95%;
+    padding: 8px;
+  }
+  
+  .voice-options label {
+    font-size: 0.9rem;
+  }
+  
+  .voice-selector select {
+    padding: 6px 10px;
+    font-size: 0.8rem;
+  }
+  
+  .blob {
+    width: 220px;
+    height: 220px;
+  }
+  
+  .blob-inner {
+    width: 180px;
+    height: 180px;
+  }
+  
+  .ai-response-text {
+    font-size: 0.9rem;
+    padding: 10px;
+  }
+}
+
