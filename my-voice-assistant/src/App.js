@@ -58,6 +58,7 @@ function App() {
   const audioContextRef = useRef(null);
   // eslint-disable-next-line no-unused-vars
   const audioSourceRef = useRef(null);
+  // eslint-disable-next-line no-unused-vars
   const recognitionTimeout = useRef(null);
 
   // Helper function to speak text using browser's built-in speech synthesis
