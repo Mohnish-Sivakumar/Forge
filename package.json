@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "cd my-voice-assistant && npm install && npm run build",
+    "build": "cd my-voice-assistant && npm install && npm run build:render",
     "start": "./run.sh",
     "dev": "node dev.js",
     "backend": "cd backend && python -m flask run --port=5001",

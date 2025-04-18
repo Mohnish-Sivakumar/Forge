@@ -4,7 +4,7 @@ services:
     name: forge-frontend
     env: static
     plan: free
-    buildCommand: cd my-voice-assistant && npm install && npm run build
+    buildCommand: cd my-voice-assistant && npm install && npm run build:render
     staticPublishPath: ./my-voice-assistant/build
     routes:
       - type: rewrite
@@ -23,7 +23,7 @@ services:
     startCommand: gunicorn backend.app:app --bind 0.0.0.0:$PORT
     envVars:
       - key: PYTHON_VERSION
-        value: 3.12.9
+        value: 3.12.1
       - key: GEMINI_API_KEY
         sync: false # This will be filled manually in Render dashboard
       - key: FLASK_ENV
@@ -31,4 +31,6 @@ services:
       - key: ALLOWED_ORIGINS
         value: "https://forge-frontend.onrender.com"
       - key: CORS_ENABLED
+        value: "true"
+      - key: ESSENTIAL_VOICES_ONLY
         value: "true" 
