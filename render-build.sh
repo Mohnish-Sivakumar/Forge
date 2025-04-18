@@ -5,10 +5,22 @@ set -o errexit
 # Initial setup
 echo "==> Running build script..."
 
+# Run storage cleanup to stay within limits
+echo "==> Running storage cleanup..."
+python api/cleanup.py
+
 # Python packages - fresh setup
 echo "==> Setting up Python environment..."
 pip install --upgrade pip
 pip install flask==2.2.3 werkzeug==2.2.3 flask-cors==3.0.10 google-generativeai==0.3.1 gunicorn==20.1.0 kokoro==0.9.4
+
+# Download only essential voice files
+echo "==> Setting up essential voice files..."
+mkdir -p api/voice_files
+for voice in af_heart am_michael; do
+  echo "Downloading $voice..."
+  curl -sL "https://huggingface.co/hexgrad/Kokoro-82M/resolve/main/voices/${voice}.pt" -o "api/voice_files/${voice}.pt"
+done
 
 # Print installed packages for debugging
 echo "==> Installed packages:"
@@ -21,11 +33,18 @@ npm install
 npm run build
 cd ..
 
+# Run cleanup again after build to remove any temporary files created during build
+echo "==> Final cleanup..."
+python api/cleanup.py
+
 # Create the startup script
 cat > start.sh << 'EOF'
 #!/usr/bin/env bash
 export SERVE_STATIC=true
 export FLASK_APP=backend/app.py
+
+# Clean up any temporary files before starting
+python api/cleanup.py
 
 # Create a simple server.py
 cat > server.py << 'EOSPY'

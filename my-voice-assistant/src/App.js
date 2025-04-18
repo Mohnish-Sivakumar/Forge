@@ -46,20 +46,11 @@ function App() {
   const [error, setError] = useState(''); // Error state
   const [selectedVoice, setSelectedVoice] = useState('default'); // Default voice
   const [useVoiceApi, setUseVoiceApi] = useState(true); // Whether to use voice API
-  // eslint-disable-next-line no-unused-vars
   const [loading, setLoading] = useState(false); // Loading state
-  // eslint-disable-next-line no-unused-vars
-  const [response, setResponse] = useState(''); // Response from API (may be redundant with aiResponse)
+  const [lastMessage, setLastMessage] = useState('');
   
   const recognitionRef = useRef(null);
   const speechResultRef = useRef(''); // Store the speech result
-  // eslint-disable-next-line no-unused-vars
-  const audioRef = useRef(new Audio());
-  const audioContextRef = useRef(null);
-  // eslint-disable-next-line no-unused-vars
-  const audioSourceRef = useRef(null);
-  // eslint-disable-next-line no-unused-vars
-  const recognitionTimeout = useRef(null);
 
   // Helper function to speak text using browser's built-in speech synthesis
   const speakWithBrowserTTS = (text) => {
@@ -82,8 +73,6 @@ function App() {
     // Split long text into smaller chunks to improve reliability
     // Browser speech synthesis can struggle with very long texts
     const MAX_CHUNK_LENGTH = 200;
-    // eslint-disable-next-line no-unused-vars
-    const textChunks = [];
     
     // Function to split text into sentences/chunks
     const splitTextIntoChunks = (text) => {
@@ -146,10 +135,6 @@ function App() {
       
       return chunks;
     };
-    
-    // eslint-disable-next-line no-unused-vars
-    const chunks = splitTextIntoChunks(text);
-    console.log(`Split text into ${chunks.length} chunks for browser TTS`);
     
     // Select a voice
     let selectedVoice = null;
@@ -393,7 +378,6 @@ function App() {
         
         if (jsonData.response) {
           setAiResponse(jsonData.response);
-          setResponse(jsonData.response); // Also update response state
           
           // Use browser's speech synthesis
           if ('speechSynthesis' in window) {
@@ -406,13 +390,11 @@ function App() {
         } else if (jsonData.error) {
           console.error('Error from API:', jsonData.error);
           setAiResponse(`Error: ${jsonData.error}`);
-          setResponse(`Error: ${jsonData.error}`); // Also update response state
           setError(`API Error: ${jsonData.error}`);
           setSpeaking(false);
         } else {
           console.error('No response field in JSON data');
           setAiResponse('Error: Could not retrieve response from API');
-          setResponse('Error: Could not retrieve response from API'); // Also update response state
           setError('The API returned an unexpected response format');
           setSpeaking(false);
         }
@@ -428,7 +410,6 @@ function App() {
         }
         const errorMessage = `Error: Failed to get response from API (Status ${textResponse.status})`;
         setAiResponse(prevResponse => prevResponse || errorMessage);
-        setResponse(prevResponse => prevResponse || errorMessage); // Also update response state
         setSpeaking(false);
       }
       
@@ -441,7 +422,7 @@ function App() {
       setError(`Network error: ${error.message}`);
       const errorMessage = 'Error: ' + error.message;
       setAiResponse(prevResponse => prevResponse || errorMessage);
-      setResponse(prevResponse => prevResponse || errorMessage); // Also update response state
+      setSpeaking(false);
       setIsWaiting(false);
       setLoading(false);
     }

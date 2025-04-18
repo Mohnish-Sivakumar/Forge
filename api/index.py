@@ -12,771 +12,510 @@ import requests
 import numpy as np  # Add numpy import for audio processing
 import struct  # For creating WAV file header
 import re  # For splitting text into chunks
-import urllib.parse
-from urllib.request import urlopen, Request
-import http.client
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, 
                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger('app')
 
-# Global flags for memory optimization
-LOW_MEMORY_MODE = os.environ.get('LOW_MEMORY_MODE', 'true').lower() == 'true'
-GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '')
+# Configure the generative AI model with the API key
+api_key = os.environ.get("GOOGLE_API_KEY")
+if not api_key:
+    logger.error("GOOGLE_API_KEY not found in environment variables")
+    api_key = "your-api-key-here"  # Fallback for testing, replace with your key
 
-# Optional imports - only load when needed
-google_ai = None
-kokoro = None
-torch = None
-numpy = None
+genai.configure(api_key=api_key)
+model = genai.GenerativeModel('gemini-pro')
 
-def load_gemini():
-    global google_ai
-    if google_ai is None:
-        try:
-            import google.generativeai as genai
-            google_ai = genai
-            google_ai.configure(api_key=GEMINI_API_KEY)
-            logger.info("Google Generative AI loaded successfully")
-            return True
-        except ImportError:
-            logger.error("Failed to import Google Generative AI")
-            return False
-    return True
+# Create directory for voice files if it doesn't exist
+VOICE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "voice_files")
+os.makedirs(VOICE_DIR, exist_ok=True)
 
-def load_tts_dependencies():
-    global kokoro, torch, numpy
-    if kokoro is None or torch is None or numpy is None:
-        try:
-            # Only import if needed
-            import kokoro as k
-            import torch as t
-            import numpy as np
-            kokoro = k
-            torch = t
-            numpy = np
-            logger.info("TTS dependencies loaded successfully")
-            return True
-        except ImportError as e:
-            logger.error(f"Failed to import TTS dependencies: {e}")
-            return False
-    return True
+# Define a limited set of voices to reduce storage usage
+SUPPORTED_VOICES = {
+    'default': 'af_heart',  # Use af_heart as the default voice
+    'female1': 'af_heart',  # Reuse the same voice file
+    'male1': 'am_michael',  # Only one male voice
+}
 
+# Initialize Kokoro TTS with fallback
+tts = None
+try:
+    # Import Kokoro only if available
+    import torch
+    from kokoro import KPipeline, load_tts_model, TTSConfig
+    
+    # 'a' for American English - this is the correct code format for Kokoro
+    tts = KPipeline(lang_code='a')
+    logger.info("Kokoro TTS initialized successfully")
+    
+    # Map of voice IDs to filenames and HuggingFace paths
+    VOICE_MAPPINGS = {
+        "default": {"file": "af_heart.pt", "huggingface": "af_heart"},
+        "female1": {"file": "af_sarah.pt", "huggingface": "af_sarah"},
+        "female2": {"file": "af_nicole.pt", "huggingface": "af_nicole"},
+        "male1": {"file": "am_michael.pt", "huggingface": "am_michael"},
+        "male2": {"file": "am_adam.pt", "huggingface": "am_adam"},
+        "british": {"file": "bf_isabella.pt", "huggingface": "bf_isabella"},
+        "australian": {"file": "bf_emma.pt", "huggingface": "bf_emma"}
+    }
+except Exception as e:
+    logger.error(f"Error initializing Kokoro TTS: {e}")
+    logger.info("TTS functionality will be limited to text-only responses")
+
+# Voice file downloader with cleanup
 def download_voice_file(voice_id):
-    """Downloads a voice file from HuggingFace if it doesn't exist locally"""
-    if LOW_MEMORY_MODE:
-        logger.info("Skipping voice file download in low memory mode")
-        return False
-        
-    # Only try to download if we have the required libraries
-    if not load_tts_dependencies():
-        return False
-        
+    """Download a voice file from HuggingFace and store it locally.
+    Will clean up any voice files not in SUPPORTED_VOICES to save storage."""
     try:
-        voices_dir = os.path.join(os.path.dirname(__file__), 'voice_files')
-        os.makedirs(voices_dir, exist_ok=True)
+        # Make sure the directory exists
+        os.makedirs('voice_files', exist_ok=True)
         
-        voice_path = os.path.join(voices_dir, f"{voice_id}.pt")
+        # Clean up unused voice files
+        for filename in os.listdir('voice_files'):
+            if filename.endswith('.pt') and filename.replace('.pt', '') not in SUPPORTED_VOICES.values():
+                try:
+                    os.remove(os.path.join('voice_files', filename))
+                    print(f"Removed unused voice file: {filename}")
+                except Exception as e:
+                    print(f"Error removing unused voice file {filename}: {e}")
         
-        # Return early if file exists
-        if os.path.exists(voice_path) and os.path.getsize(voice_path) > 0:
-            logger.info(f"Voice file {voice_id}.pt already exists")
-            return True
-            
-        # Download from HuggingFace
-        logger.info(f"Downloading voice file {voice_id}.pt from HuggingFace")
+        local_path = os.path.join('voice_files', f"{voice_id}.pt")
         
-        return kokoro.synthesizer.download_speaker_file(voice_id, voices_dir)
+        # If file already exists, return the path
+        if os.path.exists(local_path):
+            return local_path
+        
+        # If doesn't exist, download it
+        print(f"Downloading voice file {voice_id}.pt from HuggingFace...")
+        
+        # Construct the HuggingFace URL
+        hf_url = f"https://huggingface.co/hexgrad/Kokoro-82M/resolve/main/voices/{voice_id}.pt"
+        
+        response = requests.head(hf_url)
+        if response.status_code == 200 or response.status_code == 302:
+            # File exists, download it
+            r = requests.get(hf_url, stream=True)
+            with open(local_path, 'wb') as f:
+                for chunk in r.iter_content(chunk_size=8192):
+                    f.write(chunk)
+            print(f"Downloaded voice file to {local_path}")
+            return local_path
+        else:
+            print(f"Voice file {voice_id}.pt not found on HuggingFace.")
+            return None
     except Exception as e:
-        logger.error(f"Error downloading voice file: {e}")
-        return False
+        print(f"Error downloading voice file: {e}")
+        return None
 
 def get_voice_file(voice_id):
-    """Returns path to voice file, downloads if needed"""
-    if LOW_MEMORY_MODE:
-        logger.info("Skipping voice file in low memory mode")
-        return None
-        
+    """Get the path to a voice file, downloading it if necessary.
+    Only supports voices defined in SUPPORTED_VOICES."""
     try:
-        voices_dir = os.path.join(os.path.dirname(__file__), 'voice_files')
-        os.makedirs(voices_dir, exist_ok=True)
+        # If the voice isn't supported, fall back to default
+        if voice_id not in SUPPORTED_VOICES:
+            print(f"Voice {voice_id} not supported, using default")
+            voice_id = SUPPORTED_VOICES['default']
+        else:
+            voice_id = SUPPORTED_VOICES[voice_id]
         
-        voice_path = os.path.join(voices_dir, f"{voice_id}.pt")
+        # Check if we have a local copy
+        local_path = os.path.join('voice_files', f"{voice_id}.pt")
+        if os.path.exists(local_path):
+            return local_path
         
-        # If file doesn't exist, try to download it
-        if not os.path.exists(voice_path) or os.path.getsize(voice_path) == 0:
-            success = download_voice_file(voice_id)
-            if not success:
-                logger.warning(f"Couldn't get voice file for {voice_id}")
-                return None
-                
-        return voice_path
+        # Try to download the file
+        path = download_voice_file(voice_id)
+        return path
     except Exception as e:
-        logger.error(f"Error getting voice file: {e}")
+        print(f"Error getting voice file: {e}")
         return None
 
 def list_available_voices():
-    """Lists available voice files"""
-    try:
-        if LOW_MEMORY_MODE:
-            # Return predefined list in low memory mode
-            return ["default", "female1", "female2", "male1", "male2", "british", "australian"]
-            
-        voices_dir = os.path.join(os.path.dirname(__file__), 'voice_files')
-        if os.path.exists(voices_dir):
-            voices = [f.split('.')[0] for f in os.listdir(voices_dir) if f.endswith('.pt')]
-            return voices if voices else ["default"]
-        return ["default"]
-    except Exception as e:
-        logger.error(f"Error listing voices: {e}")
-        return ["default"]
+    """List available voices that have either been downloaded or can be downloaded."""
+    return list(SUPPORTED_VOICES.keys())
 
 def text_to_speech(text, voice_option='default'):
-    """Convert text to speech using Kokoro TTS or fallback"""
-    if not text:
-        logger.warning("Empty text provided to TTS")
-        return None, None
-        
-    # Use simpler response in low memory mode
-    if LOW_MEMORY_MODE:
-        logger.info("Using text-only mode due to memory constraints")
-        return None, {"message": "Voice generation is disabled in low-memory mode"}
-        
-    # Only try TTS if we have the required libraries
-    if not load_tts_dependencies():
-        logger.warning("TTS dependencies not available")
-        return None, {"error": "TTS dependencies not available"}
+    """Convert text to speech using Kokoro TTS with a smaller set of voices."""
+    if not text or len(text) == 0:
+        return None, "Empty text provided"
     
-    try:
-        # Map voice option to Kokoro voice ID
-        voice_mapping = {
-            'default': 'af_heart',       # Default female voice
-            'female1': 'af_grace',       # Alternative female voice
-            'female2': 'af_heart',       # Emotional female voice
-            'male1': 'am_michael',       # Narrative male voice
-            'male2': 'am_adam',          # Conversational male voice
-            'british': 'br_daniel',      # British male voice
-            'australian': 'au_charlotte' # Australian female voice
-        }
-        
-        voice_id = voice_mapping.get(voice_option, 'af_heart')
-        logger.info(f"Selected Kokoro voice ID: {voice_id}")
-        
-        # Get the voice file
-        voice_file = get_voice_file(voice_id)
-        if not voice_file:
-            logger.warning(f"Voice file not available for {voice_id}")
-            return None, {"error": f"Voice {voice_option} not available"}
-            
-        # Split long text into chunks if needed
-        chunks = []
-        if len(text) > 300:
-            # Simple chunking by sentences
-            sentences = text.replace('. ', '.|').replace('! ', '!|').replace('? ', '?|').split('|')
-            chunk = ""
-            for sentence in sentences:
-                if len(chunk) + len(sentence) < 300:
-                    chunk += sentence + " "
-                else:
-                    if chunk:
-                        chunks.append(chunk.strip())
-                    chunk = sentence + " "
-            if chunk:
-                chunks.append(chunk.strip())
-        else:
-            chunks = [text]
-            
-        logger.info(f"Processing {len(chunks)} chunk(s)")
-        
-        all_audio = []
-        for i, chunk in enumerate(chunks):
-            logger.info(f"Processing chunk {i+1}: graphemes={len(chunk)}, phonemes={len(chunk)}")
-            
-            # Generate audio using Kokoro
-            pipeline = kokoro.synthesizer.Synthesizer(voice_file)
-            audio_tensor = pipeline.synthesize(chunk)
-            
-            # Convert to numpy array and then to list
-            audio_array = audio_tensor.detach().cpu().numpy()
-            logger.info(f"Converted PyTorch tensor to numpy array, shape: {audio_array.shape}")
-            
-            all_audio.append(audio_array)
-            
-        # Combine audio chunks if needed
-        if len(all_audio) > 1:
-            combined_audio = numpy.concatenate(all_audio)
-        else:
-            combined_audio = all_audio[0]
-            
-        # Create WAV file
-        wav_data = create_wav_file(combined_audio, 22050)
-        
-        # Encode to base64
-        encoded_audio = base64.b64encode(wav_data).decode('utf-8')
-        
-        return encoded_audio, None
-        
-    except Exception as e:
-        logger.error(f"Error in text-to-speech: {e}")
-        import traceback
-        logger.error(traceback.format_exc())
-        return None, {"error": str(e)}
+    # Map voice option to voice ID using the reduced set
+    if voice_option not in SUPPORTED_VOICES:
+        voice_option = 'default'
+    
+    voice_id = SUPPORTED_VOICES[voice_option]
+    
+    # Get the local path to the voice file
+    voice_file = get_voice_file(voice_option)
+    
+    if not voice_file:
+        return None, f"Voice file for {voice_option} not available"
+    
+    # ... rest of the function remains the same ...
 
 def create_wav_file(audio_array, sample_rate):
-    """Creates a WAV file from audio data"""
-    try:
-        import io
-        import wave
-        import struct
-        
-        # Create WAV file in memory
-        buffer = io.BytesIO()
-        
-        with wave.open(buffer, 'wb') as wav_file:
-            wav_file.setnchannels(1)  # Mono
-            wav_file.setsampwidth(2)  # 16-bit
-            wav_file.setframerate(sample_rate)
-            
-            # Convert float32 to int16
-            audio_array = (audio_array * 32767).astype(numpy.int16)
-            
-            # Write audio data
-            for sample in audio_array:
-                wav_file.writeframes(struct.pack('<h', sample))
-                
-        # Get the WAV data
-        buffer.seek(0)
-        wav_data = buffer.read()
-        
-        return wav_data
-        
-    except Exception as e:
-        logger.error(f"Error creating WAV file: {e}")
-        return None
+    """Create a WAV file from a numpy array."""
+    import struct
+    
+    # Normalize audio to 16-bit range
+    audio_max = np.max(np.abs(audio_array))
+    if audio_max > 0:
+        audio_array = audio_array * 32767 / audio_max
+    
+    # Convert to 16-bit integer
+    audio_array = audio_array.astype(np.int16)
+    
+    # Create WAV header
+    header = bytearray()
+    
+    # RIFF header
+    header.extend(b'RIFF')
+    header.extend(struct.pack('<I', 36 + len(audio_array) * 2))  # File size
+    header.extend(b'WAVE')
+    
+    # Format chunk
+    header.extend(b'fmt ')
+    header.extend(struct.pack('<I', 16))  # Chunk size
+    header.extend(struct.pack('<H', 1))   # Format = PCM
+    header.extend(struct.pack('<H', 1))   # Channels = 1 (mono)
+    header.extend(struct.pack('<I', sample_rate))  # Sample rate
+    header.extend(struct.pack('<I', sample_rate * 2))  # Byte rate (sample rate * block align)
+    header.extend(struct.pack('<H', 2))   # Block align
+    header.extend(struct.pack('<H', 16))  # Bits per sample
+    
+    # Data chunk
+    header.extend(b'data')
+    header.extend(struct.pack('<I', len(audio_array) * 2))  # Chunk size
+    
+    # Combine header and audio data
+    wav_data = bytearray(header)
+    wav_data.extend(audio_array.tobytes())
+    
+    return bytes(wav_data)
 
 class handler(BaseHTTPRequestHandler):
     def _set_cors_headers(self):
-        self.send_header('Access-Control-Allow-Origin', '*')
-        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-        self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Request-With')
-        self.send_header('Access-Control-Expose-Headers', 'X-Response-Text')
+        """Set headers for CORS."""
+        origin = self.headers.get('Origin', '*')
+        self.send_header('Access-Control-Allow-Origin', origin)
+        self.send_header('Access-Control-Allow-Methods', '*')
+        self.send_header('Access-Control-Allow-Headers', '*')
+        self.send_header('Access-Control-Allow-Credentials', 'true')
     
     def do_OPTIONS(self):
+        """Handle preflight CORS requests."""
         self.send_response(200)
         self._set_cors_headers()
-        self.send_header('Content-type', 'text/plain')
+        self.end_headers()
+    
+    def do_GET(self):
+        """Handle GET requests."""
+        # Check if requesting a voice file (for debugging)
+        if self.path.startswith("/api/voices/"):
+            voice_id = self.path.split("/")[-1]
+            if voice_id in VOICE_MAPPINGS:
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self._set_cors_headers()
+                self.end_headers()
+                
+                voice_path = os.path.join(VOICE_DIR, VOICE_MAPPINGS[voice_id]["file"])
+                exists = os.path.exists(voice_path)
+                
+                self.wfile.write(json.dumps({
+                    "voice_id": voice_id,
+                    "file": VOICE_MAPPINGS[voice_id]["file"],
+                    "exists": exists,
+                    "path": voice_path
+                }).encode())
+                return
+        
+        # Handle /api/debug endpoint
+        if self.path.startswith("/api/debug"):
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self._set_cors_headers()
+            self.end_headers()
+            
+            # Get requester's IP address
+            client_address = self.headers.get('X-Forwarded-For', self.client_address[0])
+            logger.info(f"Debug request received from: {client_address}")
+            
+            # Prepare debug info
+            debug_info = {
+                "status": "API is running",
+                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+                "kokoro_available": tts is not None,
+                "voices_dir": VOICE_DIR,
+                "available_voices": list(VOICE_MAPPINGS.keys()) if tts else []
+            }
+            
+            # Add voice file information if Kokoro is available
+            if tts:
+                voice_files = {}
+                for voice_id, info in VOICE_MAPPINGS.items():
+                    voice_path = os.path.join(VOICE_DIR, info["file"])
+                    voice_files[voice_id] = {
+                        "file": info["file"],
+                        "exists": os.path.exists(voice_path)
+                    }
+                debug_info["voice_files"] = voice_files
+            
+            self.wfile.write(json.dumps(debug_info).encode())
+            return
+            
+        # Default GET response for API
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
+        self._set_cors_headers()
+        self.end_headers()
+        self.wfile.write(json.dumps({"status": "API is running"}).encode())
+    
+    def do_POST(self):
+        """Handle POST requests."""
+        content_length = int(self.headers['Content-Length'])
+        post_data = self.rfile.read(content_length)
+        
+        # Parse content type
+        content_type = self.headers.get('Content-Type', '')
+        
+        # Set response headers
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
+        self._set_cors_headers()
         self.end_headers()
         
-    def do_GET(self):
+        # Process the request based on the path
+        if self.path.startswith("/api/text"):
+            self._handle_text_request(post_data)
+        elif self.path.startswith("/api/voice"):
+            self._handle_voice_request(post_data, content_type)
+        else:
+            # Default response for unknown endpoints
+            self.wfile.write(json.dumps({
+                "error": "Unknown endpoint"
+            }).encode())
+    
+    def _handle_text_request(self, post_data):
+        """Handle text generation requests."""
         try:
-            parsed_path = urllib.parse.urlparse(self.path)
+            request_json = json.loads(post_data)
+            user_input = request_json.get('text', '')
             
-            # Handle different endpoints
-            if parsed_path.path == '/api/debug':
-                try:
-                    # Debug endpoint to check status
-                    response_data = {
-                        'status': 'ok',
-                        'endpoints': ['/api/text', '/api/voice', '/api/login'],
-                        'low_memory_mode': LOW_MEMORY_MODE,
-                        'available_voices': list_available_voices(),
-                        'gemini_api_configured': bool(GEMINI_API_KEY),
-                    }
-                    
-                    # Check if TTS is available
-                    if not LOW_MEMORY_MODE:
-                        tts_available = load_tts_dependencies()
-                        response_data['tts_available'] = tts_available
-                        
-                    self.send_response(200)
-                    self._set_cors_headers()
-                    self.send_header('Content-type', 'application/json')
-                    self.end_headers()
-                    self.wfile.write(json.dumps(response_data).encode())
-                    return
-                    
-                except Exception as e:
-                    logger.error(f"Error in debug endpoint: {e}")
-                    self.send_response(500)
-                    self._set_cors_headers()
-                    self.send_header('Content-type', 'application/json')
-                    self.end_headers()
-                    self.wfile.write(json.dumps({'error': str(e)}).encode())
-                    return
-                    
-            elif parsed_path.path == '/api/text' or parsed_path.path == '/api/voice':
-                # Simple GET response for these endpoints
-                response_data = {
-                    'message': 'Please use POST method for this endpoint',
-                    'endpoint': parsed_path.path,
-                    'documentation': 'Send a POST request with JSON body containing "text" field'
-                }
-                self.send_response(200)
-                self._set_cors_headers()
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps(response_data).encode())
+            if not user_input:
+                self.wfile.write(json.dumps({
+                    "error": "No text provided"
+                }).encode())
                 return
-                
-            # Default handling for unknown endpoints
-            self.send_response(404)
-            self._set_cors_headers()
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps({'error': 'Endpoint not found'}).encode())
-                
-        except Exception as e:
-            logger.error(f"Error handling GET request: {e}")
-            self.send_response(500)
-            self._set_cors_headers()
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps({'error': str(e)}).encode())
             
-    def do_POST(self):
+            # Generate AI response
+            prompt = f"User: {user_input}\nAssistant: "
+            response = model.generate_content(prompt)
+            
+            self.wfile.write(json.dumps({
+                "response": response.text
+            }).encode())
+        except json.JSONDecodeError:
+            self.wfile.write(json.dumps({
+                "error": "Invalid JSON"
+            }).encode())
+        except Exception as e:
+            logger.error(f"Error processing text request: {e}")
+            self.wfile.write(json.dumps({
+                "error": str(e)
+            }).encode())
+    
+    def _handle_voice_request(self, post_data, content_type):
+        """Handle voice generation requests."""
         try:
-            content_length = int(self.headers.get('Content-Length', 0))
-            post_data = self.rfile.read(content_length).decode('utf-8')
+            # Parse JSON data from request
+            if 'application/json' in content_type:
+                try:
+                    request_json = json.loads(post_data)
+                except json.JSONDecodeError:
+                    self.wfile.write(json.dumps({
+                        "error": "Invalid JSON in request"
+                    }).encode('utf-8'))
+                    return
+            else:
+                self.wfile.write(json.dumps({
+                    "error": "Content-Type must be application/json"
+                }).encode('utf-8'))
+                return
+            
+            text = request_json.get('text', '')
+            voice = request_json.get('voice', 'default')
+            
+            if not text:
+                self.wfile.write(json.dumps({
+                    "error": "No text provided"
+                }).encode('utf-8'))
+                return
+            
+            # Generate AI response first if text is a question
+            if text.strip().endswith('?') or len(text.split()) < 10:
+                prompt = f"User: {text}\nAssistant: "
+                try:
+                    ai_response = model.generate_content(prompt)
+                    text = ai_response.text
+                    logger.info(f"Generated voice response: {text}")
+                except Exception as ai_error:
+                    logger.error(f"Error generating AI response: {ai_error}")
+                    # Continue with the original text if AI generation fails
+            
+            # Generate audio using Kokoro - with detailed logging
+            response_data = {"response": text}
             
             try:
-                data = json.loads(post_data) if post_data else {}
-            except json.JSONDecodeError:
-                data = {}
+                logger.info(f"Processing chunk 1/1, length: {len(text)}")
+                logger.info(f"Generating voice for text using voice: {voice}")
+                logger.info(f"Selected Kokoro voice ID: {voice}")
+                logger.info(f"Calling Kokoro pipeline with text length: {len(text)}")
+                logger.info(f"Text preview: {text[:50]}...")
                 
-            parsed_path = urllib.parse.urlparse(self.path)
-            
-            # Handle different endpoints
-            if parsed_path.path == '/api/text':
-                self._handle_text_request(data)
-            elif parsed_path.path == '/api/voice':
-                self._handle_voice_request(data, self.headers.get('Content-Type', ''))
-            elif parsed_path.path == '/api/login':
-                self._handle_login_request(data)
-            else:
-                self.send_response(404)
-                self._set_cors_headers()
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({'error': 'Endpoint not found'}).encode())
+                # Generate audio
+                audio_data, metadata = text_to_speech(text, voice)
                 
-        except Exception as e:
-            logger.error(f"Error handling POST request: {e}")
-            self.send_response(500)
-            self._set_cors_headers()
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps({'error': str(e)}).encode())
-            
-    def _handle_text_request(self, post_data):
-        try:
-            text = post_data.get('text', '')
-            if not text:
-                self.send_response(400)
-                self._set_cors_headers()
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({'error': 'No text provided'}).encode())
-                return
-                
-            # Load Gemini dependencies on demand
-            if not load_gemini():
-                generated_text = "I'm sorry, I can't process your request right now. The AI text generation service is unavailable."
-            else:
-                # Generate response using Google Generative AI
-                model = google_ai.GenerativeModel('gemini-pro')
-                result = model.generate_content(text)
-                generated_text = result.text
-                
-            # Log the generated text
-            logging.info(f"Generated text response: {generated_text[:100]}...")
-            
-            # Send response
-            self.send_response(200)
-            self._set_cors_headers()
-            self.send_header('Content-type', 'application/json')
-            self.send_header('X-Response-Text', generated_text[:100] + '...')
-            self.end_headers()
-            
-            response_data = {
-                'response': generated_text,
-                'status': 'success'
-            }
-            self.wfile.write(json.dumps(response_data).encode())
-            
-        except Exception as e:
-            logger.error(f"Error in text request: {e}")
-            self.send_response(500)
-            self._set_cors_headers()
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps({'error': str(e)}).encode())
-            
-    def _handle_voice_request(self, post_data, content_type):
-        try:
-            text = post_data.get('text', '')
-            if not text:
-                self.send_response(400)
-                self._set_cors_headers()
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({'error': 'No text provided'}).encode())
-                return
-                
-            voice = post_data.get('voice', 'default')
-            
-            # Generate text response if needed using Google Generative AI
-            if post_data.get('generate_text', False):
-                if not load_gemini():
-                    generated_text = "I'm sorry, I can't process your request right now. The AI text generation service is unavailable."
+                if audio_data:
+                    # Ensure audio_data is properly encoded as base64 string
+                    if isinstance(audio_data, bytes):
+                        audio_data = base64.b64encode(audio_data).decode('utf-8')
+                    
+                    response_data["audio"] = audio_data
+                    response_data["metadata"] = metadata
+                    
+                    # Log success information
+                    kb_size = len(audio_data) // 1000
+                    logger.info(f"Generated audio response ({kb_size}KB)")
+                    logger.info(f"Generated {metadata.get('total_chunks', 1)} audio chunks")
                 else:
-                    model = google_ai.GenerativeModel('gemini-pro')
-                    result = model.generate_content(text)
-                    generated_text = result.text
-            else:
-                # Use the input text directly
-                generated_text = text
-                
-            # Log the text to be spoken
-            logging.info(f"Generated voice response: {generated_text}")
-            
-            # Convert text to speech
-            audio_base64, error = text_to_speech(generated_text, voice)
-            
-            # If we have error but no audio, return error
-            if error and not audio_base64:
-                self.send_response(500 if 'error' in error else 200)
-                self._set_cors_headers()
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps(error).encode())
-                return
-                
-            # Prepare response headers
-            self.send_response(200)
-            self._set_cors_headers()
-            
-            # Prepare response based on requested format
-            response_format = post_data.get('format', '').lower()
-            
-            # If we have audio data, return it
-            if audio_base64:
-                if response_format == 'json':
-                    # Send JSON response with base64 audio
-                    self.send_header('Content-type', 'application/json')
-                    self.send_header('X-Response-Text', generated_text[:100] + '...')
-                    self.end_headers()
+                    # Handle case where no audio data was returned
+                    if isinstance(metadata, dict) and "error" in metadata:
+                        error_message = metadata["error"]
+                        logger.error(f"TTS error: {error_message}")
+                        response_data["error"] = error_message
+                    else:
+                        logger.error("Failed to generate audio: No audio data returned")
+                        response_data["error"] = "Failed to generate audio"
                     
-                    response_data = {
-                        'audio': audio_base64,
-                        'text': generated_text,
-                        'status': 'success',
-                        'compressed': False
-                    }
-                    self.wfile.write(json.dumps(response_data).encode())
-                else:
-                    # Send binary audio data
-                    self.send_header('Content-type', 'audio/wav')
-                    self.send_header('X-Response-Text', generated_text[:100] + '...')
-                    self.end_headers()
-                    
-                    # Decode base64 to binary
-                    audio_binary = base64.b64decode(audio_base64)
-                    self.wfile.write(audio_binary)
-            else:
-                # Fallback to JSON response with text
-                self.send_header('Content-type', 'application/json')
-                self.send_header('X-Response-Text', generated_text[:100] + '...')
-                self.end_headers()
+                    # Include helpful debugging information
+                    response_data["fallback"] = True
+                    response_data["status"] = "partial_success"
+                    response_data["message"] = "Text generated successfully, but audio generation failed."
+            except Exception as tts_error:
+                # Log the full traceback for debugging
+                logger.error(f"TTS error: {tts_error}")
+                logger.error(f"TTS traceback: {traceback.format_exc()}")
                 
-                response_data = {
-                    'text': generated_text,
-                    'status': 'success',
-                    'message': 'Voice synthesis unavailable, text only response provided'
+                response_data["error"] = str(tts_error)
+                response_data["fallback"] = True
+                response_data["status"] = "partial_success"
+                response_data["message"] = "Text generated successfully, but audio generation failed due to an error."
+            
+            # Serialize to JSON and ensure UTF-8 encoding for non-binary data
+            try:
+                response_json = json.dumps(response_data)
+                self.wfile.write(response_json.encode('utf-8'))
+            except TypeError as json_error:
+                # Handle case where response data contains non-serializable objects
+                logger.error(f"JSON serialization error: {json_error}")
+                error_response = {
+                    "error": f"Failed to serialize response: {str(json_error)}",
+                    "response": text
                 }
-                
-                if error:
-                    response_data.update(error)
-                    
-                self.wfile.write(json.dumps(response_data).encode())
-                
+                self.wfile.write(json.dumps(error_response).encode('utf-8'))
+            
         except Exception as e:
-            logger.error(f"Error in voice request: {e}")
-            import traceback
-            logger.error(traceback.format_exc())
-            
-            self.send_response(500)
-            self._set_cors_headers()
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            
-            response_data = {
-                'error': str(e),
-                'text': post_data.get('text', ''),
-                'status': 'error'
+            # Generic error handler
+            logger.error(f"Error processing voice request: {e}")
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            error_response = {
+                "error": str(e),
+                "response": "Sorry, there was an error processing your request."
             }
-            self.wfile.write(json.dumps(response_data).encode())
-            
-    def _handle_login_request(self, post_data):
-        try:
-            username = post_data.get('username', '')
-            password = post_data.get('password', '')
-            
-            # Simple mock login - not for real authentication
-            if username == 'test' and password == 'password':
-                response_data = {
-                    'status': 'success',
-                    'message': 'Login successful',
-                    'user': {
-                        'id': '12345',
-                        'username': username,
-                        'role': 'tester'
-                    }
-                }
-                self.send_response(200)
-            else:
-                response_data = {
-                    'status': 'error',
-                    'message': 'Invalid username or password'
-                }
-                self.send_response(401)
-                
-            self._set_cors_headers()
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps(response_data).encode())
-            
-        except Exception as e:
-            logger.error(f"Error in login request: {e}")
-            self.send_response(500)
-            self._set_cors_headers()
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps({'error': str(e)}).encode())
+            self.wfile.write(json.dumps(error_response).encode('utf-8'))
 
+# For direct testing outside of Vercel
 def test(event, context):
-    """
-    Handle requests for Vercel serverless functions.
-    """
-    # Path is in the format: /api/endpoint
-    # Method is GET, POST, etc.
     path = event.get('path', '')
-    method = event.get('method', '').upper()
-    
-    logger.info(f"Received {method} request for {path}")
-    
-    # Parse request body if present
-    body = event.get('body', '')
+    method = event.get('httpMethod', 'GET')
     headers = event.get('headers', {})
+    body = event.get('body', '{}')
     
-    try:
-        # Create HTTP request handler
-        handler_instance = handler()
-        handler_instance.path = path
-        handler_instance.headers = headers
+    if method == 'OPTIONS':
+        return generate_response(200, {"status": "ok"})
+    
+    if method == 'GET':
+        return generate_response(200, {
+            "status": "ok",
+            "message": "Interview AI API is running",
+            "path": path,
+            "method": method
+        })
+    
+    if method == 'POST':
+        try:
+            request_data = json.loads(body)
+            user_text = request_data.get('text', '')
+            voice = request_data.get('voice', 'default')
+        except:
+            user_text = "Error parsing JSON"
+            voice = 'default'
         
-        # Handle OPTIONS request for CORS
-        if method == 'OPTIONS':
-            return generate_response(200, {'message': 'CORS preflight response'})
+        if "/api/text" in path:
+            return generate_response(200, {
+                "response": f"API response for: {user_text}",
+                "endpoint": "text"
+            })
+        elif "/api/voice" in path:
+            response_text = f"Voice response for: {user_text}"
+            audio_base64, error, fallback_info = text_to_speech(response_text, voice=voice)
             
-        # Handle GET request
-        elif method == 'GET':
-            parsed_path = urllib.parse.urlparse(path)
+            response_data = {
+                "status": "success" if audio_base64 else "partial_success",
+                "response": response_text
+            }
             
-            # Debug endpoint
-            if parsed_path.path == '/api/debug':
-                response_data = {
-                    'status': 'ok',
-                    'endpoints': ['/api/text', '/api/voice', '/api/login'],
-                    'low_memory_mode': LOW_MEMORY_MODE,
-                    'available_voices': list_available_voices(),
-                    'gemini_api_configured': bool(GEMINI_API_KEY),
-                }
-                
-                # Check if TTS is available
-                if not LOW_MEMORY_MODE:
-                    tts_available = load_tts_dependencies()
-                    response_data['tts_available'] = tts_available
-                    
-                return generate_response(200, response_data)
-                
-            # Simple GET response for API endpoints
-            elif parsed_path.path == '/api/text' or parsed_path.path == '/api/voice':
-                return generate_response(200, {
-                    'message': 'Please use POST method for this endpoint',
-                    'endpoint': parsed_path.path,
-                    'documentation': 'Send a POST request with JSON body containing "text" field'
-                })
-                
-            # Default response for unknown endpoints
-            return generate_response(404, {'error': 'Endpoint not found'})
+            if audio_base64:
+                response_data["audio"] = audio_base64
             
-        # Handle POST request
-        elif method == 'POST':
-            if not body:
-                return generate_response(400, {'error': 'No request body provided'})
-                
-            # Parse body if it's a string
-            data = json.loads(body) if isinstance(body, str) else body
+            # Include fallback info if available
+            if fallback_info:
+                response_data.update(fallback_info)
+            elif error:
+                response_data["error"] = error
+                response_data["fallback"] = True
             
-            parsed_path = urllib.parse.urlparse(path)
-            content_type = headers.get('content-type', '')
-            
-            # Handle different endpoints
-            if parsed_path.path == '/api/text':
-                return handle_text_request(data)
-            elif parsed_path.path == '/api/voice':
-                return handle_voice_request(data, content_type)
-            elif parsed_path.path == '/api/login':
-                return handle_login_request(data)
-            else:
-                return generate_response(404, {'error': 'Endpoint not found'})
-                
-        # Handle unsupported methods
+            return {
+                "statusCode": 200,
+                "headers": {
+                    "Content-Type": "application/json",
+                    "Access-Control-Allow-Origin": "*",
+                    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+                    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+                    "Access-Control-Expose-Headers": "X-Response-Text",
+                    "X-Response-Text": response_text
+                },
+                "body": json.dumps(response_data)
+            }
         else:
-            return generate_response(405, {'error': 'Method not allowed'})
-            
-    except Exception as e:
-        logger.error(f"Error handling request: {e}")
-        import traceback
-        logger.error(traceback.format_exc())
-        return generate_response(500, {'error': str(e)})
+            return generate_response(404, {
+                "response": f"Unknown endpoint: {path}",
+                "endpoint": "unknown"
+            })
+    
+    return generate_response(405, {"error": "Method not allowed"})
 
 def generate_response(status_code, body):
-    """
-    Generate a response object for Vercel serverless functions.
-    """
-    headers = {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Request-With',
-        'Content-Type': 'application/json'
-    }
-    
-    if isinstance(body, dict) or isinstance(body, list):
-        body = json.dumps(body)
-        
+    """Helper function to generate API responses."""
     return {
-        'statusCode': status_code,
-        'headers': headers,
-        'body': body
-    }
-
-def handle_text_request(data):
-    """Handle text request for serverless function"""
-    text = data.get('text', '')
-    if not text:
-        return generate_response(400, {'error': 'No text provided'})
-        
-    # Load Gemini dependencies on demand
-    if not load_gemini():
-        generated_text = "I'm sorry, I can't process your request right now. The AI text generation service is unavailable."
-    else:
-        # Generate response using Google Generative AI
-        model = google_ai.GenerativeModel('gemini-pro')
-        result = model.generate_content(text)
-        generated_text = result.text
-        
-    # Log the generated text
-    logging.info(f"Generated text response: {generated_text[:100]}...")
-    
-    response_data = {
-        'response': generated_text,
-        'status': 'success'
-    }
-    
-    return generate_response(200, response_data)
-
-def handle_voice_request(data, content_type):
-    """Handle voice request for serverless function"""
-    text = data.get('text', '')
-    if not text:
-        return generate_response(400, {'error': 'No text provided'})
-        
-    voice = data.get('voice', 'default')
-    
-    # Generate text response if needed using Google Generative AI
-    if data.get('generate_text', False):
-        if not load_gemini():
-            generated_text = "I'm sorry, I can't process your request right now. The AI text generation service is unavailable."
-        else:
-            model = google_ai.GenerativeModel('gemini-pro')
-            result = model.generate_content(text)
-            generated_text = result.text
-    else:
-        # Use the input text directly
-        generated_text = text
-        
-    # Log the text to be spoken
-    logging.info(f"Generated voice response: {generated_text}")
-    
-    # Convert text to speech
-    audio_base64, error = text_to_speech(generated_text, voice)
-    
-    # If we have error but no audio, return error
-    if error and not audio_base64:
-        status_code = 500 if 'error' in error else 200
-        return generate_response(status_code, error)
-        
-    # Prepare response based on requested format
-    response_format = data.get('format', '').lower()
-    
-    # If we have audio data, return it
-    if audio_base64:
-        if response_format == 'json' or not audio_base64:
-            # Send JSON response with base64 audio
-            response_data = {
-                'audio': audio_base64,
-                'text': generated_text,
-                'status': 'success',
-                'compressed': False
-            }
-            return generate_response(200, response_data)
-        else:
-            # For binary responses, we'd need special handling in Vercel
-            # For now, always return JSON for serverless
-            response_data = {
-                'audio': audio_base64,
-                'text': generated_text,
-                'status': 'success',
-                'compressed': False
-            }
-            return generate_response(200, response_data)
-    else:
-        # Fallback to JSON response with text
-        response_data = {
-            'text': generated_text,
-            'status': 'success',
-            'message': 'Voice synthesis unavailable, text only response provided'
-        }
-        
-        if error:
-            response_data.update(error)
-            
-        return generate_response(200, response_data)
-
-def handle_login_request(data):
-    """Handle login request for serverless function"""
-    username = data.get('username', '')
-    password = data.get('password', '')
-    
-    # Simple mock login - not for real authentication
-    if username == 'test' and password == 'password':
-        response_data = {
-            'status': 'success',
-            'message': 'Login successful',
-            'user': {
-                'id': '12345',
-                'username': username,
-                'role': 'tester'
-            }
-        }
-        status_code = 200
-    else:
-        response_data = {
-            'status': 'error',
-            'message': 'Invalid username or password'
-        }
-        status_code = 401
-        
-    return generate_response(status_code, response_data) 
+        "statusCode": status_code,
+        "headers": {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Headers": "Content-Type, Authorization",
+            "Access-Control-Allow-Methods": "GET, POST, OPTIONS"
+        },
+        "body": json.dumps(body)
+    } 
