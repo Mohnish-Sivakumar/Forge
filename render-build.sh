@@ -5,12 +5,19 @@ set -e
 echo "==> Starting render-build.sh script"
 
 # Set Python version
-export PYTHON_VERSION=3.12.1
+export PYTHON_VERSION=3.12.9
+echo "==> Using Python version: $PYTHON_VERSION"
 
 # Install backend dependencies
 echo "==> Installing Python dependencies"
 pip install --upgrade pip
-pip install -r requirements-render.txt || pip install flask==2.2.3 flask-cors==3.0.10 werkzeug==2.2.3 google-generativeai==0.3.1 gunicorn==20.1.0 requests>=2.28.0 numpy>=1.22.0
+
+# Install dependencies with more detailed output
+echo "==> Installing requirements from requirements-render.txt"
+pip install -r requirements-render.txt -v || {
+  echo "==> Warning: Failed to install from requirements-render.txt, using fallback"
+  pip install flask==2.2.3 flask-cors==3.0.10 werkzeug==2.2.3 google-generativeai==0.3.1 gunicorn==20.1.0 requests>=2.28.0 numpy>=1.22.0
+}
 
 # Set environment variables for deployment
 export ESSENTIAL_VOICES_ONLY=true
@@ -44,5 +51,9 @@ else
   # Copy built frontend files to api/static
   cp -r my-voice-assistant/build/* api/static/
 fi
+
+echo "==> Checking Python installation:"
+which python
+python --version
 
 echo "==> Build completed successfully" 

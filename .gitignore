@@ -1,4 +1,6 @@
 .vercel
+.vercelignore
+vercel.json
 
 # Python
 __pycache__/
