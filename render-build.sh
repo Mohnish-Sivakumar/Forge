@@ -1,62 +1,48 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # Exit on error
-set -o errexit
+set -e
 
-# Initial setup
-echo "==> Running build script..."
+echo "==> Starting render-build.sh script"
 
-# Python packages - fresh setup
-echo "==> Setting up Python environment..."
+# Set Python version
+export PYTHON_VERSION=3.12.1
+
+# Install backend dependencies
+echo "==> Installing Python dependencies"
 pip install --upgrade pip
-pip install flask==2.2.3 werkzeug==2.2.3 flask-cors==3.0.10 google-generativeai==0.3.1 gunicorn==20.1.0 kokoro==0.9.4
+pip install -r requirements-render.txt || pip install flask==2.2.3 flask-cors==3.0.10 werkzeug==2.2.3 google-generativeai==0.3.1 gunicorn==20.1.0 requests>=2.28.0 numpy>=1.22.0
 
-# Print installed packages for debugging
-echo "==> Installed packages:"
-pip list
+# Set environment variables for deployment
+export ESSENTIAL_VOICES_ONLY=true
+export SERVE_STATIC=true
 
-# Install node and build the frontend
-echo "==> Building frontend..."
+# Build the frontend
+echo "==> Building React frontend"
 cd my-voice-assistant
 npm install
-npm run build
+npm run build:render
 cd ..
 
-# Create the startup script
-cat > start.sh << 'EOF'
-#!/usr/bin/env bash
-export SERVE_STATIC=true
-export FLASK_APP=backend/app.py
+# Set up static file serving from the backend
+echo "==> Setting up static file serving"
 
-# Create a simple server.py
-cat > server.py << 'EOSPY'
-import os
-import sys
+# Check if backend directory exists
+if [ -d "backend" ]; then
+  echo "==> Using backend directory"
+  
+  # Create a directory for static files if it doesn't exist
+  mkdir -p backend/static
+  
+  # Copy built frontend files to backend/static
+  cp -r my-voice-assistant/build/* backend/static/
+else
+  echo "==> Using api directory (backend not found)"
+  
+  # Create a directory for static files if it doesn't exist
+  mkdir -p api/static
+  
+  # Copy built frontend files to api/static
+  cp -r my-voice-assistant/build/* api/static/
+fi
 
-# Check if required modules are available
-try:
-    import flask
-    import werkzeug
-    import kokoro
-    print(f"==> Flask version: {flask.__version__}")
-    print(f"==> Werkzeug version: {werkzeug.__version__}")
-    print(f"==> Kokoro imported successfully")
-except ImportError as e:
-    print(f"==> ERROR: {e}")
-    sys.exit(1)
-
-# Import the app
-from backend.app import app
-
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    print(f"==> Starting server on port {port}")
-    app.run(host='0.0.0.0', port=port)
-EOSPY
-
-# Start the server
-python server.py
-EOF
-
-chmod +x start.sh
-
-echo "==> Build completed!" 
+echo "==> Build completed successfully" 
