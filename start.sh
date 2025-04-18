@@ -13,17 +13,65 @@ echo "==> Setting memory optimization flags..."
 find . -name "*.pyc" -delete
 find . -name "__pycache__" -type d -exec rm -rf {} +
 
-# Print some debug info about the build directory
-echo "==> Checking build directory..."
+# Print some debug info about the build directories
+echo "==> Checking build directories..."
+echo "Current directory: $(pwd)"
+
+# Check primary build directory
 if [ -d "my-voice-assistant/build" ]; then
-  echo "  ✅ Build directory exists"
+  echo "  ✅ Primary build directory exists"
+  echo "  Static files:"
   ls -la my-voice-assistant/build/static
+  
+  # Check for JS and CSS files
+  if [ -d "my-voice-assistant/build/static/js" ]; then
+    echo "  ✅ JS directory exists:"
+    ls -la my-voice-assistant/build/static/js
+  else
+    echo "  ❌ JS directory missing"
+  fi
+  
+  if [ -d "my-voice-assistant/build/static/css" ]; then
+    echo "  ✅ CSS directory exists:"
+    ls -la my-voice-assistant/build/static/css
+  else
+    echo "  ❌ CSS directory missing"
+  fi
 else
-  echo "  ❌ Build directory missing! This will cause 404 errors."
+  echo "  ❌ Primary build directory missing"
 fi
 
-# Make sure we're in the right directory
-echo "==> Current directory: $(pwd)"
+# Check backup build directory
+if [ -d "build_backup" ]; then
+  echo "  ✅ Backup build directory exists"
+  echo "  Static files:"
+  ls -la build_backup/static
+  
+  # Check for JS and CSS files
+  if [ -d "build_backup/static/js" ]; then
+    echo "  ✅ Backup JS directory exists:"
+    ls -la build_backup/static/js
+  else
+    echo "  ❌ Backup JS directory missing"
+  fi
+  
+  if [ -d "build_backup/static/css" ]; then
+    echo "  ✅ Backup CSS directory exists:"
+    ls -la build_backup/static/css
+  else
+    echo "  ❌ Backup CSS directory missing"
+  fi
+else
+  echo "  ❌ Backup build directory missing"
+fi
+
+# Check for alternative locations that Render might use
+for path in "/opt/render/project/src/my-voice-assistant/build" "/app/my-voice-assistant/build"; do
+  if [ -d "$path" ]; then
+    echo "  ✅ Build directory found at $path"
+    ls -la "$path/static"
+  fi
+done
 
 # Start the Flask app using gunicorn with minimal workers
 echo "==> Starting with minimal gunicorn workers..."

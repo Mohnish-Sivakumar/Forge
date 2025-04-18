@@ -16,6 +16,22 @@ npm install
 CI=false npm run build
 cd ..
 
+# Create a backup of the build directory at the project root
+echo "==> Creating backup of build directory at project root..."
+if [ -d "my-voice-assistant/build" ]; then
+  # Remove any existing backup
+  if [ -d "build_backup" ]; then
+    rm -rf build_backup
+  fi
+  # Make a copy of the build directory
+  cp -r my-voice-assistant/build build_backup
+  echo "  ✅ Backup created at ./build_backup"
+  # List the backup directory to verify
+  ls -la build_backup
+else
+  echo "  ❌ No build directory to backup"
+fi
+
 # Verify the build
 echo "==> Verifying build artifacts..."
 if [ -d "my-voice-assistant/build" ]; then

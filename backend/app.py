@@ -1,6 +1,8 @@
 import os
 import json
 import logging
+import sys
+import glob
 from flask import Flask, request, jsonify, send_from_directory, Response
 from flask_cors import CORS
 import time
@@ -16,7 +18,29 @@ CORS(app)  # Enable CORS for all routes
 # Memory optimization flag
 LOW_MEMORY_MODE = os.environ.get('LOW_MEMORY_MODE', 'true').lower() == 'true'
 SERVE_STATIC = os.environ.get('SERVE_STATIC', 'true').lower() == 'true'
+
+# Primary static folder path
 STATIC_FOLDER = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'my-voice-assistant', 'build')
+
+# Alternative paths that might be used on Render
+ALTERNATIVE_PATHS = [
+    os.path.join(os.getcwd(), 'my-voice-assistant', 'build'),
+    os.path.join(os.getcwd(), 'build_backup'),
+    '/opt/render/project/src/my-voice-assistant/build',
+    '/app/my-voice-assistant/build'
+]
+
+# Use the first existing path
+for path in ALTERNATIVE_PATHS:
+    if os.path.exists(path):
+        STATIC_FOLDER = path
+        logger.info(f"Using static folder: {STATIC_FOLDER}")
+        break
+
+logger.info(f"Final static folder: {STATIC_FOLDER}")
+logger.info(f"Static folder exists: {os.path.exists(STATIC_FOLDER)}")
+if os.path.exists(STATIC_FOLDER):
+    logger.info(f"Static folder contents: {os.listdir(STATIC_FOLDER)}")
 
 # Lazy loading of dependencies
 google_ai = None
@@ -217,19 +241,36 @@ def serve_static(path):
     if not SERVE_STATIC:
         return jsonify({"error": "Static file serving is disabled"}), 404
     
+    logger.info(f"Requested path: {path}")
+    
     # Special case for static files (CSS, JS, media)
     if path.startswith('static/'):
         file_path = os.path.join(STATIC_FOLDER, path)
+        logger.info(f"Checking static file at: {file_path}")
         if os.path.exists(file_path):
+            logger.info(f"Found static file at: {file_path}")
             return send_from_directory(STATIC_FOLDER, path)
+        logger.warning(f"Static file not found at: {file_path}")
         return '', 404
 
     # Handle common assets
     if path in ['favicon.ico', 'manifest.json', 'logo192.png', 'logo512.png', 'robots.txt']:
-        return send_from_directory(STATIC_FOLDER, path)
+        file_path = os.path.join(STATIC_FOLDER, path)
+        logger.info(f"Checking asset at: {file_path}")
+        if os.path.exists(file_path):
+            logger.info(f"Found asset at: {file_path}")
+            return send_from_directory(STATIC_FOLDER, path)
+        logger.warning(f"Asset not found at: {file_path}")
     
     # Return index.html for all other routes to support React Router
-    return send_from_directory(STATIC_FOLDER, 'index.html')
+    index_path = os.path.join(STATIC_FOLDER, 'index.html')
+    logger.info(f"Returning index.html from: {index_path}")
+    if os.path.exists(index_path):
+        return send_from_directory(STATIC_FOLDER, 'index.html')
+    
+    # If index.html doesn't exist, return an error message
+    logger.error(f"index.html not found at: {index_path}")
+    return f"Static files not found. STATIC_FOLDER={STATIC_FOLDER}, path requested: {path}", 404
 
 # Add a specific route for static directory
 @app.route('/static/<path:filename>')
@@ -238,7 +279,123 @@ def serve_static_dir(filename):
     Specific handler for /static/ URLs
     This is critical for serving React's JS and CSS files
     """
-    return send_from_directory(os.path.join(STATIC_FOLDER, 'static'), filename)
+    static_dir = os.path.join(STATIC_FOLDER, 'static')
+    logger.info(f"Serving static file: {filename} from {static_dir}")
+    
+    # Check if the file exists in static/css or static/js
+    file_path = os.path.join(static_dir, filename)
+    if os.path.exists(file_path):
+        logger.info(f"Found file at: {file_path}")
+        return send_from_directory(static_dir, filename)
+    
+    # If not found, try other possible locations
+    if '/' in filename:
+        directory, fname = filename.split('/', 1)
+        dir_path = os.path.join(static_dir, directory)
+        full_path = os.path.join(dir_path, fname)
+        logger.info(f"Checking alternate path: {full_path}")
+        if os.path.exists(full_path):
+            logger.info(f"Found file at alternate path: {full_path}")
+            return send_from_directory(dir_path, fname)
+    
+    # Check for similar files as a last resort
+    if filename.endswith('.js'):
+        js_dir = os.path.join(static_dir, 'js')
+        if os.path.exists(js_dir):
+            js_files = glob.glob(os.path.join(js_dir, '*.js'))
+            if js_files:
+                found_file = os.path.basename(js_files[0])
+                logger.info(f"Fallback to similar JS file: {found_file}")
+                return send_from_directory(js_dir, found_file)
+    
+    if filename.endswith('.css'):
+        css_dir = os.path.join(static_dir, 'css')
+        if os.path.exists(css_dir):
+            css_files = glob.glob(os.path.join(css_dir, '*.css'))
+            if css_files:
+                found_file = os.path.basename(css_files[0])
+                logger.info(f"Fallback to similar CSS file: {found_file}")
+                return send_from_directory(css_dir, found_file)
+    
+    logger.error(f"File not found: {filename} in {static_dir}")
+    return f"File not found: {filename}", 404
+
+@app.route('/check/<path:file_path>')
+def check_file(file_path):
+    """
+    Endpoint to check if a specific file exists and serve it
+    This helps diagnose file serving issues
+    """
+    # First, log what we're looking for
+    logger.info(f"Check requested for file: {file_path}")
+    
+    # Check if file exists directly in the STATIC_FOLDER
+    direct_path = os.path.join(STATIC_FOLDER, file_path)
+    logger.info(f"Checking direct path: {direct_path}")
+    
+    if os.path.isfile(direct_path):
+        logger.info(f"File found at direct path: {direct_path}")
+        try:
+            return send_from_directory(STATIC_FOLDER, file_path)
+        except Exception as e:
+            logger.error(f"Error serving file: {e}")
+            return jsonify({"error": str(e)}), 500
+    
+    # If not found directly, try alternative paths
+    alternatives = []
+    for alt_base in ALTERNATIVE_PATHS:
+        alt_path = os.path.join(alt_base, file_path)
+        exists = os.path.exists(alt_path)
+        alternatives.append({
+            "path": alt_path,
+            "exists": exists,
+            "is_file": os.path.isfile(alt_path) if exists else False
+        })
+        if exists and os.path.isfile(alt_path):
+            logger.info(f"File found at alternative path: {alt_path}")
+            try:
+                return send_from_directory(os.path.dirname(alt_path), os.path.basename(alt_path))
+            except Exception as e:
+                logger.error(f"Error serving file from alternative path: {e}")
+    
+    # If file starts with static/, try to serve it from the static directory
+    if file_path.startswith('static/'):
+        rel_path = file_path[7:]  # Remove 'static/' prefix
+        static_dir = os.path.join(STATIC_FOLDER, 'static')
+        full_path = os.path.join(static_dir, rel_path)
+        logger.info(f"Checking static subpath: {full_path}")
+        
+        if os.path.isfile(full_path):
+            logger.info(f"File found at static subpath: {full_path}")
+            try:
+                return send_from_directory(static_dir, rel_path)
+            except Exception as e:
+                logger.error(f"Error serving file from static subpath: {e}")
+    
+    # If file not found, check for similar files
+    similar_files = []
+    if file_path.endswith('.js'):
+        js_dir = os.path.join(STATIC_FOLDER, 'static', 'js')
+        if os.path.exists(js_dir):
+            similar_files = glob.glob(os.path.join(js_dir, '*.js'))
+    elif file_path.endswith('.css'):
+        css_dir = os.path.join(STATIC_FOLDER, 'static', 'css')
+        if os.path.exists(css_dir):
+            similar_files = glob.glob(os.path.join(css_dir, '*.css'))
+    
+    # Return diagnostic info
+    return jsonify({
+        "error": "File not found",
+        "requested_path": file_path,
+        "full_path": direct_path,
+        "static_folder": STATIC_FOLDER,
+        "exists": os.path.exists(direct_path),
+        "is_file": os.path.isfile(direct_path),
+        "parent_dir_exists": os.path.exists(os.path.dirname(direct_path)),
+        "cwd": os.getcwd(),
+        "alternatives": alternatives,
+        "similar_files": similar_files
+    }), 404
 
 @app.route('/api/text', methods=['POST', 'OPTIONS'])
 def text_response():
@@ -391,36 +548,6 @@ def login():
         "status": "error",
         "message": "Invalid username or password"
     }), 401
-
-@app.route('/check/<path:file_path>')
-def check_file(file_path):
-    """
-    Endpoint to check if a specific file exists and serve it
-    This helps diagnose file serving issues
-    """
-    # Check if file exists directly in the STATIC_FOLDER
-    direct_path = os.path.join(STATIC_FOLDER, file_path)
-    if os.path.isfile(direct_path):
-        return send_from_directory(STATIC_FOLDER, file_path)
-    
-    # If not found directly, try to serve it from where it should be
-    if file_path.startswith('static/'):
-        # Get the relative path from STATIC_FOLDER
-        rel_path = file_path
-        if os.path.isfile(os.path.join(STATIC_FOLDER, rel_path)):
-            return send_from_directory(STATIC_FOLDER, rel_path)
-    
-    # If file not found, return diagnostic info
-    return jsonify({
-        "error": "File not found",
-        "requested_path": file_path,
-        "full_path": direct_path,
-        "static_folder": STATIC_FOLDER,
-        "exists": os.path.exists(direct_path),
-        "is_file": os.path.isfile(direct_path),
-        "parent_dir_exists": os.path.exists(os.path.dirname(direct_path)),
-        "cwd": os.getcwd()
-    }), 404
 
 def _build_cors_preflight_response():
     # Get the Origin from the request headers
