@@ -1,101 +1,62 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Exit on error
-set -e
+set -o errexit
 
-echo "==> Starting render-build.sh script"
+# Initial setup
+echo "==> Running build script..."
 
-# Set Python version
-export PYTHON_VERSION=3.12.9
-echo "==> Using Python version: $PYTHON_VERSION"
-
-# Install backend dependencies
-echo "==> Installing Python dependencies"
+# Python packages - fresh setup
+echo "==> Setting up Python environment..."
 pip install --upgrade pip
+pip install flask==2.2.3 werkzeug==2.2.3 flask-cors==3.0.10 google-generativeai==0.3.1 gunicorn==20.1.0 kokoro==0.9.4
 
-# Install dependencies with more detailed output
-echo "==> Installing requirements from requirements-render.txt"
-pip install -r requirements-render.txt -v || {
-  echo "==> Warning: Failed to install from requirements-render.txt, using fallback"
-  pip install flask==2.2.3 flask-cors==3.0.10 werkzeug==2.2.3 google-generativeai==0.3.1 gunicorn==20.1.0 requests>=2.28.0 numpy>=1.22.0
-}
+# Print installed packages for debugging
+echo "==> Installed packages:"
+pip list
 
-# Set environment variables for deployment
-export ESSENTIAL_VOICES_ONLY=true
-export SERVE_STATIC=true
-
-# Build the frontend
-echo "==> Building React frontend"
+# Install node and build the frontend
+echo "==> Building frontend..."
 cd my-voice-assistant
-
-# Install npm modules
-echo "==> Installing npm dependencies"
 npm install
-
-# Build with explicit public URL to ensure paths are correct
-echo "==> Building React app"
-PUBLIC_URL="/" npm run build:render
-
+npm run build
 cd ..
 
-# Prepare static files using our Python script
-echo "==> Running static file preparation script"
-python prepare-static.py
+# Create the startup script
+cat > start.sh << 'EOF'
+#!/usr/bin/env bash
+export SERVE_STATIC=true
+export FLASK_APP=backend/app.py
 
-# Check if static files were copied correctly
-echo "==> Verifying static files:"
-for dir in "api/static" "static"; do
-  if [ -d "$dir" ]; then
-    echo "==> $dir directory contents:"
-    ls -la $dir
-    if [ -d "$dir/static" ]; then
-      echo "==> $dir/static directory contents:"
-      ls -la $dir/static
-    fi
-  else
-    echo "==> $dir directory not found"
-  fi
-done
+# Create a simple server.py
+cat > server.py << 'EOSPY'
+import os
+import sys
 
-# Set up static file serving from the backend
-echo "==> Setting up static file serving"
+# Check if required modules are available
+try:
+    import flask
+    import werkzeug
+    import kokoro
+    print(f"==> Flask version: {flask.__version__}")
+    print(f"==> Werkzeug version: {werkzeug.__version__}")
+    print(f"==> Kokoro imported successfully")
+except ImportError as e:
+    print(f"==> ERROR: {e}")
+    sys.exit(1)
 
-# Check if backend directory exists
-if [ -d "backend" ]; then
-  echo "==> Using backend directory"
-  
-  # Create a directory for static files if it doesn't exist
-  mkdir -p backend/static
-  
-  # Copy built frontend files to backend/static
-  echo "==> Copying frontend files to backend/static"
-  cp -r my-voice-assistant/build/* backend/static/
-  
-  # Make sure the static directory structure is correct
-  if [ -d "my-voice-assistant/build/static" ]; then
-    echo "==> Ensuring static subdirectory is properly copied"
-    mkdir -p backend/static/static
-    cp -r my-voice-assistant/build/static/* backend/static/static/
-  fi
-else
-  echo "==> Using api directory (backend not found)"
-  
-  # Create a directory for static files if it doesn't exist
-  mkdir -p api/static
-  
-  # Copy built frontend files to api/static
-  echo "==> Copying frontend files to api/static"
-  cp -r my-voice-assistant/build/* api/static/
-  
-  # Make sure the static directory structure is correct
-  if [ -d "my-voice-assistant/build/static" ]; then
-    echo "==> Ensuring static subdirectory is properly copied"
-    mkdir -p api/static/static
-    cp -r my-voice-assistant/build/static/* api/static/static/
-  fi
-fi
+# Import the app
+from backend.app import app
 
-echo "==> Checking Python installation:"
-which python
-python --version
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 5000))
+    print(f"==> Starting server on port {port}")
+    app.run(host='0.0.0.0', port=port)
+EOSPY
 
-echo "==> Build completed successfully" 
+# Start the server
+python server.py
+EOF
+
+chmod +x start.sh
+
+echo "==> Build completed!" 
