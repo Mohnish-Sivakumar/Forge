@@ -21,9 +21,9 @@ logging.basicConfig(level=logging.INFO,
 logger = logging.getLogger('app')
 
 # Configure the generative AI model with the API key
-api_key = os.environ.get("GOOGLE_API_KEY")
+api_key = os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY")
 if not api_key:
-    logger.error("GOOGLE_API_KEY not found in environment variables")
+    logger.error("No API key found in environment variables. Please set either GOOGLE_API_KEY or GEMINI_API_KEY")
     api_key = "your-api-key-here"  # Fallback for testing, replace with your key
 
 genai.configure(api_key=api_key)
@@ -60,11 +60,21 @@ tts = None
 try:
     # Import Kokoro only if available
     import torch
-    from kokoro import KPipeline, load_tts_model, TTSConfig
-    
-    # 'a' for American English - this is the correct code format for Kokoro
-    tts = KPipeline(lang_code='a')
-    logger.info("Kokoro TTS initialized successfully")
+    # Try different import approaches depending on kokoro version
+    try:
+        from kokoro import KPipeline, load_tts_model, TTSConfig
+        tts = KPipeline(lang_code='a')
+        logger.info("Kokoro TTS initialized successfully with KPipeline")
+    except ImportError:
+        try:
+            from kokoro import T2SModel
+            # Just check if we can create a model, actual initialization will be done later
+            logger.info("Kokoro TTS initialized with T2SModel")
+            # We'll set tts to True to indicate it's available
+            tts = True
+        except ImportError:
+            logger.error("Could not import Kokoro TTS pipeline classes")
+            raise
     
     # Map of voice IDs to filenames and HuggingFace paths
     VOICE_MAPPINGS = {
@@ -194,7 +204,7 @@ def text_to_speech(text, voice_option='default'):
     try:
         import kokoro
     except ImportError:
-        print("Kokoro TTS not available")
+        logger.warning("Kokoro TTS not available")
         return None
     
     # Get the voice file path
@@ -202,20 +212,43 @@ def text_to_speech(text, voice_option='default'):
     
     # If voice file not available, return None
     if not voice_path:
-        print(f"Voice file for {voice_option} not available")
+        logger.warning(f"Voice file for {voice_option} not available")
         return None
     
     try:
-        # Create Kokoro pipeline
-        tts_pipeline = kokoro.T2SModel(voice_path)
-        
-        # Set parameters for better quality
-        voice_samples, sampling_rate = tts_pipeline.inference(
-            text,
-            top_k=30,
-            top_p=0.5,
-            temperature=0.7
-        )
+        logger.info(f"Using voice file: {voice_path}")
+        # Check which Kokoro interface is available
+        if hasattr(kokoro, 'T2SModel'):
+            logger.info("Using T2SModel interface")
+            # Create Kokoro pipeline with T2SModel
+            tts_pipeline = kokoro.T2SModel(voice_path)
+            
+            # Set parameters for better quality
+            voice_samples, sampling_rate = tts_pipeline.inference(
+                text,
+                top_k=30,
+                top_p=0.5,
+                temperature=0.7
+            )
+        elif hasattr(kokoro, 'KPipeline'):
+            logger.info("Using KPipeline interface")
+            # Create Kokoro pipeline with KPipeline
+            tts_pipeline = kokoro.KPipeline(lang_code='a')
+            
+            # Load the voice model
+            voice_model = kokoro.load_tts_model(voice_path)
+            
+            # Set parameters for better quality
+            voice_samples, sampling_rate = tts_pipeline.inference(
+                text,
+                voice=voice_model,
+                top_k=30,
+                top_p=0.5,
+                temperature=0.7
+            )
+        else:
+            logger.error("No supported Kokoro interface found")
+            return None
         
         # Convert PyTorch tensor to numpy array
         audio_array = voice_samples.cpu().numpy()
@@ -223,7 +256,7 @@ def text_to_speech(text, voice_option='default'):
         # Create WAV file from the audio data
         return create_wav_file(audio_array, sampling_rate)
     except Exception as e:
-        print(f"Error in text-to-speech: {str(e)}")
+        logger.error(f"Error in text-to-speech: {e}")
         return None
     finally:
         # Clean up to free memory

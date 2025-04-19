@@ -122,9 +122,25 @@ def serve_static(path):
     logger.info(f"Serving static file: {path}")
     
     if static_folder:
-        return send_from_directory(static_folder, path)
+        # Special handling for static directory (CSS, JS, etc.)
+        if path.startswith('static/'):
+            # If the path starts with 'static/', serve from the static subfolder 
+            return send_from_directory(static_folder, path)
+        else:
+            try:
+                # Try to serve directly from the static folder
+                return send_from_directory(static_folder, path)
+            except:
+                # If not found, try serving from the "static" subdirectory
+                # This handles requests like /favicon.ico that might be in either location
+                try:
+                    return send_from_directory(os.path.join(static_folder, 'static'), path)
+                except Exception as e:
+                    logger.error(f"Error serving static file {path}: {e}")
+                    return f"File not found: {path}", 404
     else:
-        return f"Static files not available. Path requested: {path}"
+        logger.error(f"No static folder available to serve {path}")
+        return f"Static files not available. Path requested: {path}", 404
 
 if __name__ == '__main__':
     # Get port from environment variable or default to 5000

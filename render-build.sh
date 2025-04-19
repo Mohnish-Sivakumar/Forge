@@ -26,8 +26,15 @@ export SERVE_STATIC=true
 # Build the frontend
 echo "==> Building React frontend"
 cd my-voice-assistant
+
+# Install npm modules
+echo "==> Installing npm dependencies"
 npm install
-npm run build:render
+
+# Build with explicit public URL to ensure paths are correct
+echo "==> Building React app"
+PUBLIC_URL="/" npm run build:render
+
 cd ..
 
 # Set up static file serving from the backend
@@ -41,7 +48,15 @@ if [ -d "backend" ]; then
   mkdir -p backend/static
   
   # Copy built frontend files to backend/static
+  echo "==> Copying frontend files to backend/static"
   cp -r my-voice-assistant/build/* backend/static/
+  
+  # Make sure the static directory structure is correct
+  if [ -d "my-voice-assistant/build/static" ]; then
+    echo "==> Ensuring static subdirectory is properly copied"
+    mkdir -p backend/static/static
+    cp -r my-voice-assistant/build/static/* backend/static/static/
+  fi
 else
   echo "==> Using api directory (backend not found)"
   
@@ -49,7 +64,22 @@ else
   mkdir -p api/static
   
   # Copy built frontend files to api/static
+  echo "==> Copying frontend files to api/static"
   cp -r my-voice-assistant/build/* api/static/
+  
+  # Make sure the static directory structure is correct
+  if [ -d "my-voice-assistant/build/static" ]; then
+    echo "==> Ensuring static subdirectory is properly copied"
+    mkdir -p api/static/static
+    cp -r my-voice-assistant/build/static/* api/static/static/
+  fi
+fi
+
+echo "==> Verifying static files:"
+if [ -d "backend/static/static" ]; then
+  ls -la backend/static/static
+elif [ -d "api/static/static" ]; then
+  ls -la api/static/static
 fi
 
 echo "==> Checking Python installation:"

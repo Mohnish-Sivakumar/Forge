@@ -5,6 +5,7 @@
   "scripts": {
     "build": "cd my-voice-assistant && npm install && npm run build:render",
     "start": "./run.sh",
+    "start:static": "node static-server.js",
     "dev": "node dev.js",
     "backend": "cd backend && python -m flask run --port=5001",
     "frontend": "cd my-voice-assistant && npm start"
@@ -14,7 +15,7 @@
     "npm": "9.x"
   },
   "dependencies": {
-    "express": "^5.1.0",
+    "express": "^4.18.2",
     "http-proxy-middleware": "^3.0.5",
     "node-fetch": "^3.3.2"
   }
