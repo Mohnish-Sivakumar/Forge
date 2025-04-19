@@ -16,4 +16,7 @@ services:
       - key: FLASK_ENV
         value: production
       - key: ESSENTIAL_VOICES_ONLY
-        value: "true" 
+        value: "true"
+      - key: PYTHONUNBUFFERED
+        value: "1" # Ensure logs are output immediately
+    healthCheckPath: /health 

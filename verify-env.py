@@ -1,79 +1,113 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 import sys
 import os
 import importlib.util
+import platform
 
+# Print basic environment info
+print("==> Environment verification script")
 print(f"Python version: {sys.version}")
-print(f"Python executable: {sys.executable}")
-print(f"Current directory: {os.getcwd()}")
+print(f"Platform: {platform.platform()}")
+print(f"Working directory: {os.getcwd()}")
 
-# Check for critical modules
+# Check for essential environment variables
+print("\n==> Checking environment variables:")
+env_vars = {
+    "GEMINI_API_KEY": os.environ.get("GEMINI_API_KEY", None),
+    "GOOGLE_API_KEY": os.environ.get("GOOGLE_API_KEY", None),
+    "FLASK_ENV": os.environ.get("FLASK_ENV", None),
+    "PORT": os.environ.get("PORT", None),
+    "ESSENTIAL_VOICES_ONLY": os.environ.get("ESSENTIAL_VOICES_ONLY", None),
+    "SERVE_STATIC": os.environ.get("SERVE_STATIC", None)
+}
+
+for var, value in env_vars.items():
+    status = "✓ SET" if value else "✗ NOT SET"
+    value_display = "<redacted>" if value and var.endswith("_KEY") else value
+    print(f"  {var}: {status} {value_display if value and not var.endswith('_KEY') else ''}")
+
+# Check for important directories
+print("\n==> Checking directories:")
+dirs_to_check = [
+    "api",
+    "backend",
+    "my-voice-assistant",
+    "api/static",
+    "backend/static",
+    "my-voice-assistant/build"
+]
+
+for dir_name in dirs_to_check:
+    status = "✓ EXISTS" if os.path.exists(dir_name) else "✗ NOT FOUND"
+    print(f"  {dir_name}: {status}")
+
+# Check for important files
+print("\n==> Checking files:")
+files_to_check = [
+    "api/index.py",
+    "api/handler.py",
+    "backend/app.py",
+    "app.py",
+    "requirements.txt",
+    "requirements-render.txt",
+    "start.sh",
+    "my-voice-assistant/build/index.html"
+]
+
+for file_name in files_to_check:
+    status = "✓ EXISTS" if os.path.exists(file_name) else "✗ NOT FOUND"
+    print(f"  {file_name}: {status}")
+
+# Try to import key modules
+print("\n==> Checking key modules:")
 modules_to_check = [
-    "flask", 
-    "werkzeug", 
-    "google.generativeai", 
-    "gunicorn", 
-    "numpy", 
-    "requests"
+    "flask",
+    "json",
+    "google.generativeai",
+    "kokoro"
 ]
 
 for module_name in modules_to_check:
     try:
         spec = importlib.util.find_spec(module_name)
         if spec is not None:
-            module = importlib.import_module(module_name)
-            version = getattr(module, '__version__', 'unknown')
-            print(f"✅ {module_name}: {version}")
+            importlib.import_module(module_name)
+            if module_name == "flask":
+                import flask
+                print(f"  {module_name}: ✓ IMPORTED (version: {flask.__version__})")
+            elif module_name == "google.generativeai":
+                import google.generativeai
+                print(f"  {module_name}: ✓ IMPORTED")
+            elif module_name == "kokoro":
+                import kokoro
+                print(f"  {module_name}: ✓ IMPORTED")
+            else:
+                print(f"  {module_name}: ✓ IMPORTED")
         else:
-            print(f"❌ {module_name}: Not found")
-    except ImportError:
-        print(f"❌ {module_name}: Import error")
-    except Exception as e:
-        print(f"❌ {module_name}: Error: {e}")
+            print(f"  {module_name}: ✗ NOT FOUND")
+    except ImportError as e:
+        print(f"  {module_name}: ✗ IMPORT ERROR ({str(e)})")
 
-# Check for TTS modules (optional)
-tts_modules = ["kokoro", "torch", "soundfile"]
-print("\nChecking TTS modules:")
-for module_name in tts_modules:
-    try:
-        spec = importlib.util.find_spec(module_name)
-        if spec is not None:
-            module = importlib.import_module(module_name)
-            version = getattr(module, '__version__', 'available')
-            print(f"✅ {module_name}: {version}")
+# Try to verify Kokoro TTS functionality without actually running it
+print("\n==> Checking Kokoro TTS configuration:")
+try:
+    # Just check if Kokoro can be imported and initialized
+    if importlib.util.find_spec("kokoro") is not None:
+        import kokoro
+        # Don't actually create a pipeline as it might download models
+        print(f"  Kokoro module: ✓ AVAILABLE")
+        
+        # Check if voice files directory exists
+        voice_dirs = ["api/voice_files", "backend/voice_files", "voice_files"]
+        voice_dir_exists = any(os.path.exists(d) for d in voice_dirs)
+        
+        if voice_dir_exists:
+            print(f"  Voice files directory: ✓ EXISTS")
         else:
-            print(f"⚠️ {module_name}: Not found (voice features will be limited)")
-    except ImportError:
-        print(f"⚠️ {module_name}: Import error (voice features will be limited)")
-    except Exception as e:
-        print(f"⚠️ {module_name}: Error: {e}")
-
-print("\nEnvironment variables:")
-for key, value in os.environ.items():
-    if key.startswith(("PYTHON", "NODE", "FLASK", "ESSENTIAL", "GEMINI", "GOOGLE")):
-        print(f"  {key}={value}")
-
-print("\nDirectory structure:")
-for dir_name in ["api", "backend", "my-voice-assistant"]:
-    if os.path.exists(dir_name):
-        print(f"  {dir_name}/: exists")
-        # List the first few files in this directory
-        files = os.listdir(dir_name)[:5]
-        for file in files:
-            print(f"    - {file}")
-        if len(os.listdir(dir_name)) > 5:
-            print(f"    - ... ({len(os.listdir(dir_name)) - 5} more)")
+            print(f"  Voice files directory: ✗ NOT FOUND (voices will be downloaded on first use)")
     else:
-        print(f"  {dir_name}/: MISSING")
+        print(f"  Kokoro module: ✗ NOT AVAILABLE")
+except Exception as e:
+    print(f"  Kokoro configuration check error: {str(e)}")
 
-# Check specific files
-key_files = ["app.py", "backend/app.py", "api/index.py", "requirements.txt", "requirements-render.txt"]
-print("\nKey files:")
-for file_path in key_files:
-    if os.path.exists(file_path):
-        size = os.path.getsize(file_path)
-        print(f"  {file_path}: ✅ ({size} bytes)")
-    else:
-        print(f"  {file_path}: ❌ Missing")
-
-print("\nAll checks completed.") 
+print("\n==> Environment verification complete") 

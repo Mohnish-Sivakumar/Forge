@@ -1,36 +1,76 @@
-# Render Deployment Instructions
+# Deployment Instructions for Render
 
-## Quick Deployment
+This document provides step-by-step instructions for deploying the voice assistant application to Render.
 
-To deploy this application to Render:
+## Prerequisites
 
-1. Fork this repository to your own GitHub account
-2. Log in to [Render](https://render.com)
-3. Click "New" and select "Web Service"
-4. Connect your GitHub account and select this repository
-5. Use the following settings:
-   - **Name**: forge-app (or choose your own)
-   - **Environment**: Python
-   - **Build Command**: `./render-build.sh`
-   - **Start Command**: `./start.sh`
-6. Add the following environment variables:
-   - `PYTHON_VERSION`: 3.12.9
-   - `NODE_VERSION`: 18
-   - `GEMINI_API_KEY`: Your Google Gemini API key
-   - `FLASK_ENV`: production
-   - `ESSENTIAL_VOICES_ONLY`: true
-7. Click "Create Web Service"
+- A [Render account](https://render.com)
+- The source code of the application on GitHub
+- Google Gemini API key
+
+## Setup Steps
+
+### 1. Create a New Web Service
+
+1. Log in to your Render dashboard
+2. Click "New" and select "Web Service"
+3. Connect your GitHub repository or select "Deploy from GitHub" and enter your repository information
+
+### 2. Configure the Service
+
+Use the following settings:
+
+- **Name**: `voice-assistant` (or a name of your choice)
+- **Region**: Choose the region closest to your users
+- **Branch**: `main` (or your primary branch)
+- **Runtime**: `Python`
+- **Build Command**: `./render-build.sh`
+- **Start Command**: `./start.sh`
+- **Plan**: Free or Standard (as per your requirements)
+
+### 3. Add Environment Variables
+
+Click on "Advanced" and add the following environment variables:
+
+- `GEMINI_API_KEY`: Your Google Gemini API key
+- `PYTHON_VERSION`: `3.12.9` 
+- `NODE_VERSION`: `18`
+- `FLASK_ENV`: `production`
+- `ESSENTIAL_VOICES_ONLY`: `true`
+
+### 4. Deploy the Service
+
+Click "Create Web Service" to start the deployment process. The initial build may take a few minutes.
+
+## Important Files in the Repository
+
+- `render.yaml`: Configuration file for the service
+- `render-build.sh`: Script that builds both the backend and frontend
+- `start.sh`: Script that starts the service
+- `api/handler.py`: WSGI adapter for the HTTP server
+- `verify-env.py`: Environment verification script
 
 ## Troubleshooting
 
-If deployment fails:
+If you encounter any issues with the deployment, check the following:
 
-1. **Check the Logs**: In the Render dashboard, go to your service and click on "Logs"
-2. **Verify API Key**: Make sure your Gemini API key is correct
-3. **Check Python Version**: Make sure Render is using Python 3.12.9 as specified
-4. **Memory Issues**: If deployment fails due to memory issues during npm install:
-   - Try redeploying, sometimes it works on the second try
-   - Or modify the `render-build.sh` script to use `npm install --no-optional`
+1. **502 Bad Gateway Errors**: Check the logs in the Render dashboard to see if the server is starting correctly. The most common issue is that the server is not properly responding to web requests.
+
+2. **Voice not working**: Make sure your Gemini API key is correctly set in the environment variables. Also check if the Kokoro voice files are being downloaded correctly (see logs).
+
+3. **Build failing**: Ensure that your repository contains all the necessary files, especially `render-build.sh` and `start.sh` with executable permissions.
+
+4. **Frontend not loading**: Check if the static files are being correctly built and served.
+
+## Checking Deployment Status
+
+After deployment, use the following endpoints to verify the service is working correctly:
+
+- `/health`: Should return a 200 status with a JSON response indicating the service is healthy
+- `/api/debug`: Returns detailed information about the API's status
+- `/`: Should load the frontend interface
+
+If you encounter any issues, please check the logs in the Render dashboard for more information.
 
 ## Technology Stack
 

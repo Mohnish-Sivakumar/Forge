@@ -56,6 +56,11 @@ elif [ -f "backend/app.py" ]; then
   echo "==> Starting app.py in backend directory"
   cd backend
   exec gunicorn app:app --log-file=- --bind 0.0.0.0:$PORT --workers 2 --timeout 120
+# Check for our new handler.py file first
+elif [ -f "api/handler.py" ]; then
+  echo "==> Using api/handler.py WSGI adapter"
+  export PYTHONPATH=$PYTHONPATH:$(pwd)
+  exec gunicorn --timeout 120 api.handler:app --log-file=- --bind 0.0.0.0:$PORT --workers 2
 # Otherwise, try to use api/index.py
 elif [ -f "api/index.py" ]; then
   echo "==> Using api/index.py as fallback"
