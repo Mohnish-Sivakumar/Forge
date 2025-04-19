@@ -5,6 +5,7 @@ import traceback
 import logging
 from http.server import BaseHTTPRequestHandler
 import google.generativeai as genai
+import gc
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -24,128 +25,120 @@ model = genai.GenerativeModel("gemini-pro")
 # Global variable to hold loaded Kokoro instances (lazy loaded)
 kokoro_instance = None
 
+# Add this global variable section with other globals
+_kokoro_loaded = False
+_MEMORY_LIMIT = float(os.environ.get('MAX_MEMORY_MB', 400)) * 0.8  # 80% of max memory
+_CACHE_VOICES = {}  # Voice model cache
+
 def lazy_load_kokoro(force=False):
-    """Lazily loads the Kokoro TTS library only when needed"""
-    global kokoro_instance
+    """Load Kokoro only when needed and if memory allows"""
+    global _kokoro_loaded
     
-    # If we already have a loaded instance and not forcing a reload, return it
-    if kokoro_instance is not None and not force:
-        return kokoro_instance
+    # Skip if already loaded and not forced
+    if _kokoro_loaded and not force:
+        return True
     
-    # If we're in memory saving mode, only load if we have room
-    if MEMORY_SAVING_MODE:
-        # Check current memory usage
-        try:
-            import psutil
-            process = psutil.Process(os.getpid())
-            memory_info = process.memory_info()
-            memory_mb = memory_info.rss / 1024 / 1024
-            logger.info(f"Current memory usage: {memory_mb:.2f} MB")
-            
-            if memory_mb > MAX_MEMORY_USAGE:
-                logger.warning(f"Memory usage ({memory_mb:.2f} MB) exceeds limit ({MAX_MEMORY_USAGE} MB). Using text-only mode.")
-                return None
-        except ImportError:
-            logger.warning("psutil not available, cannot check memory usage")
-    
+    # Check memory availability before loading
     try:
-        # Only import here to avoid loading these heavy libraries if not needed
+        import psutil
+        process = psutil.Process(os.getpid())
+        memory_mb = process.memory_info().rss / 1024 / 1024
+        print(f"Current memory usage before loading Kokoro: {memory_mb:.2f} MB")
+        
+        # Only load if we have enough memory headroom
+        if memory_mb > _MEMORY_LIMIT * 0.7:  # If using more than 70% of memory limit
+            print(f"WARNING: Memory usage too high to load Kokoro: {memory_mb:.2f} MB > {_MEMORY_LIMIT * 0.7:.2f} MB")
+            return False
+    except ImportError:
+        print("Cannot check memory usage - proceeding with caution")
+    
+    # Try to import Kokoro with CPU-only settings
+    try:
+        # Set environment variables to force CPU mode
+        os.environ['CUDA_VISIBLE_DEVICES'] = ''
+        os.environ['TORCH_CPU_MODE'] = '1'
+        
+        # Import libraries directly here to keep them out of memory when not needed
+        import torch
+        torch.set_num_threads(2)  # Limit thread count to save memory
+        
+        # Now import Kokoro with minimal voice options
         import kokoro
+        global tts_pipe, voices
         
-        # Create minimal configuration to reduce memory usage
-        pipeline = kokoro.load_tts_pipeline(
-            "hexgrad/Kokoro-82M",
-            low_vram=True,  # Enable low VRAM mode
-            cache_dir="/tmp/kokoro_cache"  # Use tmp directory for caching
-        )
+        # Setup Kokoro with minimal settings
+        tts_pipe = kokoro.Pipeline()
+        voices = {
+            'default': 'af_heart',      # Default female voice
+            'female1': 'af_heart',      # Female voice
+            'male1': 'am_michael'       # Male voice
+        }
+        _kokoro_loaded = True
+        print("Successfully loaded Kokoro")
+        return True
         
-        logger.info("Kokoro TTS pipeline loaded successfully in low-memory mode")
-        kokoro_instance = pipeline
-        return kokoro_instance
     except Exception as e:
-        logger.error(f"Failed to load Kokoro: {str(e)}")
-        logger.error(traceback.format_exc())
-        return None
+        print(f"Failed to load Kokoro: {e}")
+        return False
 
 def cleanup_kokoro():
     """Clean up Kokoro resources to free memory"""
-    global kokoro_instance
+    global _kokoro_loaded, tts_pipe, _CACHE_VOICES
     
-    if kokoro_instance is not None:
+    if _kokoro_loaded:
         try:
-            # Release resources
-            del kokoro_instance
+            # Clear Kokoro pipeline
+            tts_pipe = None
+            _CACHE_VOICES = {}
             
+            # Clear Torch cache if possible
+            try:
+                import torch
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+            except:
+                pass
+                
             # Force garbage collection
-            import gc
             gc.collect()
-            
-            logger.info("Kokoro resources cleaned up")
+            _kokoro_loaded = False
+            print("Kokoro resources released")
         except Exception as e:
-            logger.error(f"Error cleaning up Kokoro: {str(e)}")
-        finally:
-            kokoro_instance = None
+            print(f"Error during Kokoro cleanup: {e}")
 
 def text_to_speech(text, voice_option='default'):
-    """
-    Convert text to speech, with memory usage awareness.
-    Will fall back to text-only mode if memory is constrained.
-    """
-    # Try to lazily load Kokoro
-    pipeline = lazy_load_kokoro()
+    """Generate speech audio from text using the specified voice"""
+    if not text:
+        return None, "Empty text provided"
     
-    # If we couldn't load Kokoro, return text-only response
-    if pipeline is None:
-        logger.info(f"Using text-only mode for: {text[:50]}...")
-        return {
-            "text": text,
-            "audio": None,
-            "format": "text-only",
-            "low_memory_mode": True
-        }
+    # Load Kokoro if needed
+    if not lazy_load_kokoro():
+        return None, "Insufficient memory to load voice model"
     
     try:
-        logger.info(f"Generating speech for text: {text[:50]}...")
+        # Select voice ID
+        voice_id = voices.get(voice_option, 'af_heart')
+        print(f"Selected Kokoro voice ID: {voice_id}")
         
-        # Determine voice ID based on option
-        voice_id = "af_heart"  # default female voice
-        if voice_option == "male1":
-            voice_id = "am_michael"
-        elif voice_option == "male2":
-            voice_id = "am_adam"
+        # Generate audio
+        print(f"Calling Kokoro pipeline with text length: {len(text)}")
+        print(f"Text preview: {text[:50]}...")
         
         # Generate speech
-        audio_array = pipeline(text, voice_id=voice_id)
-        
-        # Convert to base64 for transport
-        import base64
-        import numpy as np
-        audio_bytes = audio_array.astype(np.float32).tobytes()
-        audio_b64 = base64.b64encode(audio_bytes).decode('utf-8')
+        audio = tts_pipe.generate_speech(text, voice_id)
         
         # Clean up to free memory
         cleanup_kokoro()
+        gc.collect()
         
-        return {
-            "text": text,
-            "audio": audio_b64,
-            "format": "base64",
-            "voice": voice_id
-        }
+        return audio, None
+        
     except Exception as e:
-        logger.error(f"Error generating speech: {str(e)}")
-        logger.error(traceback.format_exc())
-        
-        # Clean up in case of error
+        import traceback
+        print(f"Error generating speech: {e}")
+        print(traceback.format_exc())
         cleanup_kokoro()
-        
-        # Return text-only response
-        return {
-            "text": text,
-            "audio": None,
-            "format": "text-only",
-            "error": str(e)
-        }
+        return None, str(e)
 
 def list_available_voices():
     """List available voice options"""
@@ -425,7 +418,7 @@ class handler(BaseHTTPRequestHandler):
             
             if can_use_kokoro:
                 # Try to generate speech
-                tts_result = text_to_speech(ai_text, voice)
+                tts_result, error = text_to_speech(ai_text, voice)
                 
                 # Send response
                 self.send_response(200)
@@ -441,14 +434,14 @@ class handler(BaseHTTPRequestHandler):
                 }
                 
                 # Add audio data if available
-                if tts_result.get("audio"):
-                    response["audio"] = tts_result.get("audio")
-                    response["format"] = tts_result.get("format", "base64")
-                    response["voice"] = tts_result.get("voice", voice)
+                if tts_result:
+                    response["audio"] = tts_result
+                    response["format"] = "base64"
+                    response["voice"] = voice
                 else:
                     # No audio, return text only with a message
                     response["low_memory_mode"] = True
-                    response["message"] = "Running in low-memory mode. Voice synthesis will happen in the browser."
+                    response["message"] = error
                 
                 self.wfile.write(json.dumps(response).encode())
             else:
@@ -616,7 +609,7 @@ def test(event, context):
                 
                 if can_use_kokoro:
                     # Try to generate speech
-                    tts_result = text_to_speech(ai_text, voice)
+                    tts_result, error = text_to_speech(ai_text, voice)
                     
                     response = {
                         "status": "success", 
@@ -625,14 +618,14 @@ def test(event, context):
                     }
                     
                     # Add audio data if available
-                    if tts_result.get("audio"):
-                        response["audio"] = tts_result.get("audio")
-                        response["format"] = tts_result.get("format", "base64")
-                        response["voice"] = tts_result.get("voice", voice)
+                    if tts_result:
+                        response["audio"] = tts_result
+                        response["format"] = "base64"
+                        response["voice"] = voice
                     else:
                         # No audio, return text only with a message
                         response["low_memory_mode"] = True
-                        response["message"] = "Running in low-memory mode. Voice synthesis will happen in the browser."
+                        response["message"] = error
                     
                     return generate_response(
                         200, 
