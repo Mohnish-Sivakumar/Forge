@@ -170,6 +170,12 @@ class handler(BaseHTTPRequestHandler):
         self._set_cors_headers()
         self.end_headers()
 
+    def do_HEAD(self):
+        self.send_response(200)
+        self.send_header('Content-type', 'application/json')
+        self._set_cors_headers()
+        self.end_headers()
+
     def do_GET(self):
         try:
             path = self.path.strip('/')
