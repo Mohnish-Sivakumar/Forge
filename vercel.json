@@ -1,0 +1,39 @@
+{
+  "version": 2,
+  "builds": [
+    { "src": "api/index.py", "use": "@vercel/python" },
+    { "src": "my-voice-assistant/package.json", "use": "@vercel/static-build", "config": { "distDir": "build" } }
+  ],
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        { "key": "Access-Control-Allow-Origin", "value": "*" },
+        { "key": "Access-Control-Allow-Methods", "value": "GET, POST, OPTIONS" },
+        { "key": "Access-Control-Allow-Headers", "value": "Content-Type, Authorization" },
+        { "key": "Access-Control-Expose-Headers", "value": "X-Response-Text" },
+        { "key": "Access-Control-Allow-Credentials", "value": "true" }
+      ]
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "/api/index.py"
+    },
+    { "src": "/api-test", "dest": "/api/test.html" },
+    { "src": "/voice-test", "dest": "/api/voice-test.html" },
+    { "src": "/login-test", "dest": "/api/login-test.html" },
+    { "src": "/static/(.*)", "dest": "/my-voice-assistant/build/static/$1", "headers": { "cache-control": "public, max-age=31536000, immutable" } },
+    { "src": "/manifest.json", "dest": "/my-voice-assistant/build/manifest.json" },
+    { "src": "/favicon.ico", "dest": "/my-voice-assistant/build/favicon.ico" },
+    { "handle": "filesystem" },
+    { "src": "/(.*)", "dest": "/my-voice-assistant/build/index.html", "headers": { "cache-control": "public, max-age=0, must-revalidate" } }
+  ],
+  "functions": {
+    "api/index.py": {
+      "memory": 1024,
+      "maxDuration": 60
+    }
+  }
+} 
