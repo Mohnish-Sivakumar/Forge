@@ -12,8 +12,6 @@ import requests
 import numpy as np  # Add numpy import for audio processing
 import struct  # For creating WAV file header
 import re  # For splitting text into chunks
-import urllib.request
-import glob
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, 
@@ -21,9 +19,9 @@ logging.basicConfig(level=logging.INFO,
 logger = logging.getLogger('app')
 
 # Configure the generative AI model with the API key
-api_key = os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY")
+api_key = os.environ.get("GOOGLE_API_KEY")
 if not api_key:
-    logger.error("No API key found in environment variables. Please set either GOOGLE_API_KEY or GEMINI_API_KEY")
+    logger.error("GOOGLE_API_KEY not found in environment variables")
     api_key = "your-api-key-here"  # Fallback for testing, replace with your key
 
 genai.configure(api_key=api_key)
@@ -33,48 +31,16 @@ model = genai.GenerativeModel('gemini-pro')
 VOICE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "voice_files")
 os.makedirs(VOICE_DIR, exist_ok=True)
 
-# Define primary voice model to use - this will be downloaded first
-PRIMARY_VOICE_ID = "af_heart"
-
-# Define limited voice options to save space
-ESSENTIAL_VOICES = {
-    "default": "af_heart",  # Default female voice
-    "female1": "af_heart",  # Default female voice - reused
-    "male1": "am_michael",  # Male voice option
-    "male2": "am_adam",     # Alternative male voice
-}
-
-# Map friendly names to actual voice IDs
-VOICE_MAP = {
-    "default": "af_heart",
-    "female1": "af_heart",
-    "female2": "af_bella",
-    "male1": "am_michael",
-    "male2": "am_adam",
-    "british": "en_joylin",
-    "australian": "en_william"
-}
-
 # Initialize Kokoro TTS with fallback
 tts = None
 try:
     # Import Kokoro only if available
     import torch
-    # Try different import approaches depending on kokoro version
-    try:
-        from kokoro import KPipeline, load_tts_model, TTSConfig
-        tts = KPipeline(lang_code='a')
-        logger.info("Kokoro TTS initialized successfully with KPipeline")
-    except ImportError:
-        try:
-            from kokoro import T2SModel
-            # Just check if we can create a model, actual initialization will be done later
-            logger.info("Kokoro TTS initialized with T2SModel")
-            # We'll set tts to True to indicate it's available
-            tts = True
-        except ImportError:
-            logger.error("Could not import Kokoro TTS pipeline classes")
-            raise
+    from kokoro import KPipeline, load_tts_model, TTSConfig
+    
+    # 'a' for American English - this is the correct code format for Kokoro
+    tts = KPipeline(lang_code='a')
+    logger.info("Kokoro TTS initialized successfully")
     
     # Map of voice IDs to filenames and HuggingFace paths
     VOICE_MAPPINGS = {
@@ -91,187 +57,242 @@ except Exception as e:
     logger.info("TTS functionality will be limited to text-only responses")
 
 def download_voice_file(voice_id):
-    """Download a specific voice file from HuggingFace"""
-    
-    # Create voice_files directory if it doesn't exist
-    os.makedirs('voice_files', exist_ok=True)
-    
-    # Destination path for the voice file
-    dest_path = os.path.join('voice_files', f'{voice_id}.pt')
-    
-    # If file already exists and has content, skip download
-    if os.path.exists(dest_path) and os.path.getsize(dest_path) > 0:
-        print(f"Voice file {voice_id}.pt already exists")
-        return True
-
+    """Download voice file from HuggingFace if it doesn't exist locally."""
+    if tts is None:
+        logger.warning("Kokoro not initialized, can't download voice files")
+        return False
+        
     try:
-        # URL for the voice file on HuggingFace
-        url = f"https://huggingface.co/hexgrad/Kokoro-82M/resolve/main/voices/{voice_id}.pt"
+        voice_info = VOICE_MAPPINGS.get(voice_id, VOICE_MAPPINGS["default"])
+        voice_file = voice_info["file"]
+        huggingface_id = voice_info["huggingface"]
         
-        # Create a request with a timeout
-        req = urllib.request.Request(url)
+        voice_path = os.path.join(VOICE_DIR, voice_file)
         
-        # Try to download the file
-        with urllib.request.urlopen(req, timeout=20) as response:
-            # Write the file in chunks to avoid memory issues
-            with open(dest_path, 'wb') as f:
-                chunk_size = 1024 * 1024  # 1MB chunks
-                while True:
-                    chunk = response.read(chunk_size)
-                    if not chunk:
-                        break
-                    f.write(chunk)
-                    f.flush()  # Ensure data is written to disk
-            
-            print(f"Downloaded voice file {voice_id}.pt")
+        # If the file already exists, return success
+        if os.path.exists(voice_path):
+            logger.info(f"Voice file {voice_file} already exists")
             return True
+            
+        # Try to download the voice file from HuggingFace
+        logger.info(f"Downloading voice file {voice_file} from HuggingFace...")
+        
+        # Construct the correct HuggingFace URL with the proper voice ID
+        # The URL format should be 'resolve/main/' not 'blob/main/'
+        url = f"https://huggingface.co/hexgrad/Kokoro-82M/resolve/main/voices/{huggingface_id}.pt"
+        logger.info(f"Download URL: {url}")
+        
+        response = requests.get(url, stream=True)
+        if response.status_code == 200:
+            with open(voice_path, 'wb') as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    f.write(chunk)
+            logger.info(f"Successfully downloaded voice file {voice_file}")
+            return True
+        else:
+            logger.error(f"Failed to download voice file: HTTP {response.status_code}")
+            return False
     except Exception as e:
-        print(f"Error downloading voice file {voice_id}.pt: {str(e)}")
-        # Remove partial file if download failed
-        if os.path.exists(dest_path):
-            try:
-                os.remove(dest_path)
-            except:
-                pass
+        logger.error(f"Error downloading voice file: {e}")
         return False
 
-def get_voice_file(voice_option='default'):
-    """Get the path to a voice file, downloading it if necessary"""
-    
-    # Map the voice option to a voice ID
-    voice_id = VOICE_MAP.get(voice_option, "af_heart")
-    
-    # Check if we're limiting to essential voices only
-    if os.environ.get('ESSENTIAL_VOICES_ONLY', 'true').lower() == 'true':
-        # Use only essential voices to save space
-        voice_id = ESSENTIAL_VOICES.get(voice_option, PRIMARY_VOICE_ID)
-    
-    # Create voice_files directory if it doesn't exist
-    os.makedirs('voice_files', exist_ok=True)
-    
-    # Path to the voice file
-    voice_file_path = os.path.join('voice_files', f'{voice_id}.pt')
-    
-    # If file doesn't exist or is empty, try to download it
-    if not os.path.exists(voice_file_path) or os.path.getsize(voice_file_path) == 0:
+def get_voice_file(voice_id):
+    """Get the path to a voice file, downloading it if needed."""
+    if tts is None:
+        logger.error("Kokoro TTS not initialized")
+        return None
+
+    # If voice_id is not found in mappings, use default
+    if voice_id not in VOICE_MAPPINGS:
+        logger.warning(f"Voice ID '{voice_id}' not found, using default")
+        voice_id = "default"
+
+    voice_info = VOICE_MAPPINGS[voice_id]
+    voice_file = voice_info["file"]
+    voice_path = os.path.join(VOICE_DIR, voice_file)
+
+    # If the file doesn't exist, try to download it
+    if not os.path.exists(voice_path):
+        logger.info(f"Voice file {voice_file} not found, attempting to download")
         success = download_voice_file(voice_id)
-        
-        # If download failed, try to use the primary voice instead
-        if not success and voice_id != PRIMARY_VOICE_ID:
-            print(f"Falling back to primary voice {PRIMARY_VOICE_ID}")
-            voice_id = PRIMARY_VOICE_ID
-            voice_file_path = os.path.join('voice_files', f'{voice_id}.pt')
-            
-            # Try to download the primary voice if needed
-            if not os.path.exists(voice_file_path) or os.path.getsize(voice_file_path) == 0:
-                download_voice_file(voice_id)
-    
-    # Return the path to the voice file if it exists
-    if os.path.exists(voice_file_path) and os.path.getsize(voice_file_path) > 0:
-        return voice_file_path
-    
-    # If we couldn't get a voice file, return None
-    return None
+        if not success:
+            logger.error(f"Failed to download voice file for {voice_id}")
+            return None
+
+    # Return the path if it exists now
+    if os.path.exists(voice_path):
+        return voice_path
+    else:
+        return None
 
 def list_available_voices():
-    """List available voice files"""
-    voice_files = []
-    try:
-        # Create voice_files directory if it doesn't exist
-        os.makedirs('voice_files', exist_ok=True)
-        
-        # List files in the directory
-        for file in os.listdir('voice_files'):
-            if file.endswith('.pt') and os.path.getsize(os.path.join('voice_files', file)) > 0:
-                voice_id = file.replace('.pt', '')
-                voice_files.append(voice_id)
-    except Exception as e:
-        print(f"Error listing voice files: {str(e)}")
+    """Return a list of available voice IDs."""
+    if tts is None:
+        return []
     
-    return voice_files
+    available_voices = []
+    for voice_id in VOICE_MAPPINGS:
+        voice_file = VOICE_MAPPINGS[voice_id]["file"]
+        voice_path = os.path.join(VOICE_DIR, voice_file)
+        if os.path.exists(voice_path):
+            available_voices.append(voice_id)
+    
+    return available_voices
 
 def text_to_speech(text, voice_option='default'):
-    """Convert text to speech using Kokoro TTS"""
-    
-    # Clean up any temporary files from previous runs
-    for temp_file in glob.glob('temp_*.wav'):
-        try:
-            os.remove(temp_file)
-        except:
-            pass
-    
-    # Check if Kokoro is available
+    """Convert text to speech using Kokoro TTS."""
+    import base64
+    import os
+    import logging
+    import re
+    import numpy as np
+
     try:
-        import kokoro
-    except ImportError:
-        logger.warning("Kokoro TTS not available")
-        return None
-    
-    # Get the voice file path
-    voice_path = get_voice_file(voice_option)
-    
-    # If voice file not available, return None
-    if not voice_path:
-        logger.warning(f"Voice file for {voice_option} not available")
-        return None
-    
-    try:
-        logger.info(f"Using voice file: {voice_path}")
-        # Check which Kokoro interface is available
-        if hasattr(kokoro, 'T2SModel'):
-            logger.info("Using T2SModel interface")
-            # Create Kokoro pipeline with T2SModel
-            tts_pipeline = kokoro.T2SModel(voice_path)
+        MAX_TEXT_LENGTH = 500  # Maximum characters per chunk
+        
+        # Handle long text by splitting into chunks at sentence boundaries
+        if len(text) > MAX_TEXT_LENGTH:
+            logging.info(f"Text length ({len(text)}) exceeds maximum ({MAX_TEXT_LENGTH}). Splitting into chunks.")
             
-            # Set parameters for better quality
-            voice_samples, sampling_rate = tts_pipeline.inference(
-                text,
-                top_k=30,
-                top_p=0.5,
-                temperature=0.7
-            )
-        elif hasattr(kokoro, 'KPipeline'):
-            logger.info("Using KPipeline interface")
-            # Create Kokoro pipeline with KPipeline
-            tts_pipeline = kokoro.KPipeline(lang_code='a')
+            # Split at sentence boundaries (periods, question marks, exclamation points followed by space)
+            sentence_pattern = r'[.!?]\s+'
+            sentences = re.split(sentence_pattern, text)
             
-            # Load the voice model
-            voice_model = kokoro.load_tts_model(voice_path)
+            # Rebuild sentences with their punctuation
+            chunks = []
+            current_chunk = ""
             
-            # Set parameters for better quality
-            voice_samples, sampling_rate = tts_pipeline.inference(
-                text,
-                voice=voice_model,
-                top_k=30,
-                top_p=0.5,
-                temperature=0.7
-            )
+            for i, sentence in enumerate(sentences):
+                # Skip empty sentences
+                if not sentence.strip():
+                    continue
+                
+                # Add punctuation back if this isn't the last sentence
+                if i < len(sentences) - 1:
+                    # Find which punctuation was used
+                    match_pos = text.find(sentence) + len(sentence)
+                    if match_pos < len(text):
+                        punct = text[match_pos]
+                        sentence = sentence + punct + " "
+                
+                # Check if adding this sentence would exceed our chunk size
+                if len(current_chunk) + len(sentence) <= MAX_TEXT_LENGTH:
+                    current_chunk += sentence
+                else:
+                    # If the current chunk is not empty, save it and start a new one
+                    if current_chunk:
+                        chunks.append(current_chunk.strip())
+                    current_chunk = sentence
+            
+            # Add the final chunk if not empty
+            if current_chunk:
+                chunks.append(current_chunk.strip())
+            
+            logging.info(f"Split text into {len(chunks)} chunks")
+            
+            # For now, just process the first chunk to avoid huge audio files
+            # In a more advanced implementation, you could process all chunks
+            text = chunks[0]
+            is_truncated = len(chunks) > 1
+            total_chunks = len(chunks)
         else:
-            logger.error("No supported Kokoro interface found")
-            return None
+            is_truncated = False
+            total_chunks = 1
         
-        # Convert PyTorch tensor to numpy array
-        audio_array = voice_samples.cpu().numpy()
+        logging.info(f"Processing text for TTS: {text[:50]}... ({len(text)} chars)")
         
-        # Create WAV file from the audio data
-        return create_wav_file(audio_array, sampling_rate)
-    except Exception as e:
-        logger.error(f"Error in text-to-speech: {e}")
-        return None
-    finally:
-        # Clean up to free memory
-        if 'tts_pipeline' in locals():
-            del tts_pipeline
-        import gc
-        gc.collect()
+        # Select voice model based on voice_option
+        voice_file = get_voice_file(voice_option)
+        if not voice_file:
+            logging.error(f"No voice file found for {voice_option}, falling back to browser TTS")
+            return None, {
+                "error": f"Voice '{voice_option}' not available",
+                "available_voices": list_available_voices()
+            }
         
-        # Try to free up CUDA memory if available
+        logging.info(f"Using voice file: {voice_file}")
+        
+        # Initialize Kokoro TTS
+        from kokoro import load_tts_model, TTSConfig
+        
+        # Load the model with lower sample rate for smaller file size
+        tts_config = TTSConfig()
+        tts_config.sample_rate = 16000  # Lower sample rate (was 22050) for smaller files
+        
         try:
-            import torch
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
-        except:
-            pass
+            model = load_tts_model(voice_file, tts_config)
+        except Exception as e:
+            logging.error(f"Failed to load TTS model: {e}")
+            return None, {"error": f"Failed to load TTS model: {str(e)}"}
+        
+        # Generate audio
+        try:
+            audio_array = model.tts(text)
+            
+            # Create a WAV file in memory
+            try:
+                # Use scipy.io.wavfile if available for better handling
+                try:
+                    from scipy.io import wavfile
+                    import io
+                    
+                    wav_buffer = io.BytesIO()
+                    wavfile.write(wav_buffer, tts_config.sample_rate, audio_array)
+                    wav_buffer.seek(0)
+                    wav_data = wav_buffer.read()
+                except ImportError:
+                    # Fallback to manual WAV creation
+                    logging.info("scipy.io.wavfile not available, creating WAV file manually")
+                    wav_data = create_wav_file(audio_array, tts_config.sample_rate)
+                
+                # Convert to base64
+                audio_base64 = base64.b64encode(wav_data).decode('utf-8')
+                
+                # Check if compression would help
+                try:
+                    import zlib
+                    compressed_data = zlib.compress(wav_data, level=9)
+                    compression_ratio = len(compressed_data) / len(wav_data)
+                    
+                    # If compression saves at least 20% space, use it
+                    if compression_ratio <= 0.8:
+                        logging.info(f"Compressing audio data, ratio: {compression_ratio:.2f}")
+                        compressed_base64 = base64.b64encode(compressed_data).decode('utf-8')
+                        
+                        # Return audio data and metadata
+                        return compressed_base64, {
+                            "is_compressed": True,
+                            "sample_rate": tts_config.sample_rate,
+                            "original_size": len(wav_data),
+                            "compressed_size": len(compressed_data),
+                            "text_length": len(text),
+                            "truncated": is_truncated,
+                            "total_chunks": total_chunks
+                        }
+                    else:
+                        logging.info(f"Compression not effective (ratio: {compression_ratio:.2f}), skipping")
+                except ImportError:
+                    logging.info("zlib not available, skipping compression")
+                
+                # Return uncompressed audio data and metadata
+                return audio_base64, {
+                    "is_compressed": False,
+                    "sample_rate": tts_config.sample_rate,
+                    "original_size": len(wav_data),
+                    "text_length": len(text),
+                    "truncated": is_truncated,
+                    "total_chunks": total_chunks
+                }
+            except Exception as wav_error:
+                logging.error(f"Failed to create WAV file: {wav_error}")
+                return None, {"error": f"Failed to create WAV file: {str(wav_error)}"}
+                
+        except Exception as tts_error:
+            logging.error(f"Failed to generate TTS: {tts_error}")
+            return None, {"error": f"Failed to generate TTS: {str(tts_error)}"}
+    except Exception as e:
+        logging.error(f"Unexpected error in text_to_speech: {e}")
+        return None, {"error": f"Unexpected error: {str(e)}"}
 
 def create_wav_file(audio_array, sample_rate):
     """Create a WAV file from a numpy array."""
@@ -312,61 +333,6 @@ def create_wav_file(audio_array, sample_rate):
     wav_data.extend(audio_array.tobytes())
     
     return bytes(wav_data)
-
-# Function to clean up unused voice files
-def cleanup_voice_files():
-    """Remove unused voice files to save space, keeping only essential voices"""
-    try:
-        # Create voice_files directory if it doesn't exist
-        voice_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "voice_files")
-        os.makedirs(voice_dir, exist_ok=True)
-        
-        # Always keep these essential voice files
-        essential_files = set([f"{ESSENTIAL_VOICES[k]}.pt" for k in ESSENTIAL_VOICES])
-        
-        # Also always keep the primary voice
-        essential_files.add(f"{PRIMARY_VOICE_ID}.pt")
-        
-        # Get the current timestamp
-        now = time.time()
-        
-        # List all voice files
-        for file in os.listdir(voice_dir):
-            if file.endswith('.pt') and file not in essential_files:
-                file_path = os.path.join(voice_dir, file)
-                
-                # Get the file's last access time
-                file_atime = os.path.getatime(file_path)
-                
-                # If the file hasn't been accessed in the last 30 days, delete it
-                if now - file_atime > 30 * 24 * 60 * 60:  # 30 days in seconds
-                    try:
-                        os.remove(file_path)
-                        print(f"Removed unused voice file: {file}")
-                    except Exception as e:
-                        print(f"Error removing voice file {file}: {str(e)}")
-    except Exception as e:
-        print(f"Error cleaning up voice files: {str(e)}")
-
-# Also clean up other temp files
-def cleanup_temp_files():
-    """Remove temporary files to save space"""
-    try:
-        # Clean up any temporary WAV files
-        for temp_file in glob.glob('temp_*.wav'):
-            try:
-                # Check if the file is older than 1 hour
-                file_mtime = os.path.getmtime(temp_file)
-                if time.time() - file_mtime > 60 * 60:  # 1 hour in seconds
-                    os.remove(temp_file)
-                    print(f"Removed old temp file: {temp_file}")
-            except:
-                pass
-    except Exception as e:
-        print(f"Error cleaning up temp files: {str(e)}")
-
-# Call cleanup functions periodically
-cleanup_counter = 0
 
 class handler(BaseHTTPRequestHandler):
     def _set_cors_headers(self):
@@ -448,18 +414,6 @@ class handler(BaseHTTPRequestHandler):
     
     def do_POST(self):
         """Handle POST requests."""
-        global cleanup_counter
-        
-        # Run cleanup every 50 requests
-        cleanup_counter += 1
-        if cleanup_counter >= 50:
-            cleanup_counter = 0
-            cleanup_temp_files()
-            
-            # Only run voice cleanup occasionally (every 100 requests)
-            if cleanup_counter % 2 == 0:
-                cleanup_voice_files()
-                
         content_length = int(self.headers['Content-Length'])
         post_data = self.rfile.read(content_length)
         

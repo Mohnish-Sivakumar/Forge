@@ -39,56 +39,210 @@ const VOICE_OPTIONS = [
 ];
 
 function App() {
-  // State for voice input
   const [listening, setListening] = useState(false);
-  const [aiResponse, setAiResponse] = useState('');
-  const [error, setError] = useState('');
   const [speaking, setSpeaking] = useState(false);
   const [isWaiting, setIsWaiting] = useState(false);
-  const [lastMessage, setLastMessage] = useState('');
-  const [isLoading, setLoading] = useState(false);
+  const [aiResponse, setAiResponse] = useState(''); // Store AI's text response
+  const [error, setError] = useState(''); // Error state
+  const [selectedVoice, setSelectedVoice] = useState('default'); // Default voice
+  const [useVoiceApi, setUseVoiceApi] = useState(true); // Whether to use voice API
+  const [loading, setLoading] = useState(false); // Loading state
+  const [response, setResponse] = useState(''); // Response from API (may be redundant with aiResponse)
   
-  // Voice options
-  const [selectedVoice, setSelectedVoice] = useState('default');
-  const [useVoiceApi, setUseVoiceApi] = useState(true);
-  
-  // Use only necessary refs
   const recognitionRef = useRef(null);
-  const speechResultRef = useRef('');
-  const blobRef = useRef(null);
-  
-  // Add effect to clean up audio resources when component unmounts
-  useEffect(() => {
-    // Cleanup function to run on unmount
-    return () => {
-      stopAudioPlayback();
-    };
-  }, []);
+  const speechResultRef = useRef(''); // Store the speech result
+  const audioRef = useRef(new Audio());
+  const audioContextRef = useRef(null);
+  const audioSourceRef = useRef(null);
 
-  // Stop any playing audio and release resources
+  // Helper function to speak text using browser's built-in speech synthesis
+  const speakWithBrowserTTS = (text) => {
+    if (!text) {
+      console.warn('No text provided for browser TTS');
+      return;
+    }
+    
+    if (!window.speechSynthesis) {
+      console.warn('Browser does not support speech synthesis');
+      return;
+    }
+    
+    // Stop any existing speech or audio
+    stopAudioPlayback();
+    
+    console.log('Using browser TTS fallback');
+    setSpeaking(true);
+    
+    // Split long text into smaller chunks to improve reliability
+    // Browser speech synthesis can struggle with very long texts
+    const MAX_CHUNK_LENGTH = 200;
+    const textChunks = [];
+    
+    // Function to split text into sentences/chunks
+    const splitTextIntoChunks = (text) => {
+      if (text.length <= MAX_CHUNK_LENGTH) {
+        return [text];
+      }
+      
+      const sentences = text.match(/[^.!?]+[.!?]+/g) || [];
+      const chunks = [];
+      let currentChunk = '';
+      
+      sentences.forEach(sentence => {
+        // If adding this sentence would make the chunk too long, start a new chunk
+        if (currentChunk.length + sentence.length > MAX_CHUNK_LENGTH && currentChunk.length > 0) {
+          chunks.push(currentChunk.trim());
+          currentChunk = '';
+        }
+        
+        // If a single sentence is too long, split it further
+        if (sentence.length > MAX_CHUNK_LENGTH) {
+          // If we have accumulated text, add it first
+          if (currentChunk.length > 0) {
+            chunks.push(currentChunk.trim());
+            currentChunk = '';
+          }
+          
+          // Split long sentence by commas if possible
+          const segments = sentence.split(/, /);
+          if (segments.length > 1) {
+            let segment = '';
+            segments.forEach(part => {
+              if (segment.length + part.length + 2 > MAX_CHUNK_LENGTH) {
+                chunks.push(segment.trim());
+                segment = part + ', ';
+              } else {
+                segment += part + ', ';
+              }
+            });
+            if (segment.length > 0) {
+              chunks.push(segment.trim());
+            }
+          } else {
+            // No commas, just split by length
+            let i = 0;
+            while (i < sentence.length) {
+              const chunk = sentence.substr(i, MAX_CHUNK_LENGTH);
+              chunks.push(chunk.trim());
+              i += MAX_CHUNK_LENGTH;
+            }
+          }
+        } else {
+          currentChunk += sentence;
+        }
+      });
+      
+      // Add any remaining text
+      if (currentChunk.length > 0) {
+        chunks.push(currentChunk.trim());
+      }
+      
+      return chunks;
+    };
+    
+    const chunks = splitTextIntoChunks(text);
+    console.log(`Split text into ${chunks.length} chunks for browser TTS`);
+    
+    // Select a voice
+    let selectedVoice = null;
+    try {
+      const voices = window.speechSynthesis.getVoices();
+      if (voices.length > 0) {
+        // Try to use a good quality voice - prefer female voices in English
+        const englishVoices = voices.filter(voice => voice.lang.includes('en-'));
+        if (englishVoices.length > 0) {
+          // Prefer female voices if available
+          const femaleVoice = englishVoices.find(voice => 
+            voice.name.toLowerCase().includes('female') || 
+            voice.name.toLowerCase().includes('samantha') ||
+            voice.name.toLowerCase().includes('victoria'));
+          
+          selectedVoice = femaleVoice || englishVoices[0];
+        }
+      }
+    } catch (e) {
+      console.warn('Error selecting voice for TTS:', e);
+    }
+    
+    // Check if voices are loaded yet
+    if (selectedVoice === null && window.speechSynthesis.getVoices().length === 0) {
+      // Voices not loaded yet, try again when they're ready
+      window.speechSynthesis.onvoiceschanged = () => {
+        // Try call again once voices are loaded
+        window.speechSynthesis.onvoiceschanged = null; // Prevent infinite loop
+        speakWithBrowserTTS(text);
+      };
+      return;
+    }
+    
+    // Track speaking state
+    let chunkIndex = 0;
+    const speakNextChunk = () => {
+      if (chunkIndex >= chunks.length) {
+        // All done
+        console.log('Browser TTS finished speaking all chunks');
+        setSpeaking(false);
+        return;
+      }
+      
+      const chunk = chunks[chunkIndex];
+      const utterance = new SpeechSynthesisUtterance(chunk);
+      
+      // Set the selected voice if available
+      if (selectedVoice) {
+        utterance.voice = selectedVoice;
+      }
+      
+      // Use a slightly slower rate and moderate pitch for better clarity
+      utterance.rate = 0.95;
+      utterance.pitch = 1.0;
+      
+      utterance.onend = () => {
+        console.log(`Browser TTS finished chunk ${chunkIndex + 1}/${chunks.length}`);
+        chunkIndex++;
+        // Continue with next chunk
+        speakNextChunk();
+      };
+      
+      utterance.onerror = (event) => {
+        console.error(`Browser TTS error on chunk ${chunkIndex + 1}:`, event);
+        // Try to continue with next chunk on error
+        chunkIndex++;
+        speakNextChunk();
+      };
+      
+      try {
+        console.log(`Speaking chunk ${chunkIndex + 1}/${chunks.length}`);
+        window.speechSynthesis.speak(utterance);
+      } catch (e) {
+        console.error('Error speaking with browser TTS:', e);
+        // Try to continue with next chunk
+        chunkIndex++;
+        setTimeout(speakNextChunk, 100);
+      }
+    };
+    
+    // Start speaking
+    speakNextChunk();
+  };
+
+  // Stop any ongoing audio playback
   const stopAudioPlayback = () => {
+    // Stop any playing audio elements
     if (window.activeAudio) {
       try {
         window.activeAudio.pause();
-        window.activeAudio.src = '';
-        window.activeAudio.load();
+        if (window.activeAudioURL) {
+          URL.revokeObjectURL(window.activeAudioURL);
+          window.activeAudioURL = null;
+        }
+        window.activeAudio = null;
       } catch (e) {
         console.error('Error stopping audio:', e);
       }
     }
     
-    if (window.activeAudioURL) {
-      try {
-        URL.revokeObjectURL(window.activeAudioURL);
-      } catch (e) {
-        console.error('Error revoking object URL:', e);
-      }
-      window.activeAudioURL = null;
-    }
-    
-    window.activeAudio = null;
-    
-    // Stop any browser speech synthesis
+    // Cancel any browser speech synthesis
     if (window.speechSynthesis) {
       window.speechSynthesis.cancel();
     }
@@ -96,39 +250,40 @@ function App() {
     setSpeaking(false);
   };
 
-  // Helper function to speak text using browser's built-in speech synthesis
-  const speakWithBrowserTTS = (text) => {
-    if (!text || typeof text !== 'string') {
-      console.error('Invalid text provided to speakWithBrowserTTS:', text);
-      return;
+  // Initialize audio context
+  useEffect(() => {
+    // Initialize audio context (only when needed to avoid warning)
+    if (!audioContextRef.current) {
+      audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
     }
+    
+    // Clean up on unmount
+    return () => {
+      stopAudioPlayback();
+      if (audioContextRef.current) {
+        audioContextRef.current.close().catch(console.error);
+      }
+    };
+  }, []);
 
-    if (!('speechSynthesis' in window)) {
-      console.error('Browser does not support speech synthesis');
-      setError('Your browser does not support text-to-speech.');
-      return;
+  // Initialize audio system
+  useEffect(() => {
+    // Initialize global audio references
+    window.activeAudio = null;
+    window.activeAudioURL = null;
+    
+    // Pre-load voices for browser TTS
+    if (window.speechSynthesis) {
+      window.speechSynthesis.onvoiceschanged = () => {
+        window.speechSynthesis.getVoices();
+      };
     }
-
-    // Only keep the needed part of the function
-    const utterance = new SpeechSynthesisUtterance(text);
     
-    utterance.onstart = () => {
-      setSpeaking(true);
+    // Cleanup when component unmounts
+    return () => {
+      stopAudioPlayback();
     };
-    
-    utterance.onend = () => {
-      setSpeaking(false);
-      setLastMessage(text);
-    };
-    
-    utterance.onerror = (e) => {
-      console.error('Speech synthesis error:', e);
-      setSpeaking(false);
-    };
-    
-    // Speak the text
-    window.speechSynthesis.speak(utterance);
-  };
+  }, []);
 
   const toggleListening = () => {
     // Clear any previous errors
@@ -230,6 +385,7 @@ function App() {
         
         if (jsonData.response) {
           setAiResponse(jsonData.response);
+          setResponse(jsonData.response); // Also update response state
           
           // Use browser's speech synthesis
           if ('speechSynthesis' in window) {
@@ -242,11 +398,13 @@ function App() {
         } else if (jsonData.error) {
           console.error('Error from API:', jsonData.error);
           setAiResponse(`Error: ${jsonData.error}`);
+          setResponse(`Error: ${jsonData.error}`); // Also update response state
           setError(`API Error: ${jsonData.error}`);
           setSpeaking(false);
         } else {
           console.error('No response field in JSON data');
           setAiResponse('Error: Could not retrieve response from API');
+          setResponse('Error: Could not retrieve response from API'); // Also update response state
           setError('The API returned an unexpected response format');
           setSpeaking(false);
         }
@@ -262,6 +420,7 @@ function App() {
         }
         const errorMessage = `Error: Failed to get response from API (Status ${textResponse.status})`;
         setAiResponse(prevResponse => prevResponse || errorMessage);
+        setResponse(prevResponse => prevResponse || errorMessage); // Also update response state
         setSpeaking(false);
       }
       
@@ -274,7 +433,7 @@ function App() {
       setError(`Network error: ${error.message}`);
       const errorMessage = 'Error: ' + error.message;
       setAiResponse(prevResponse => prevResponse || errorMessage);
-      setSpeaking(false);
+      setResponse(prevResponse => prevResponse || errorMessage); // Also update response state
       setIsWaiting(false);
       setLoading(false);
     }
@@ -469,9 +628,10 @@ function App() {
 
   return (
     <div className="App">
+      <div className="background-square"></div>
       <div className="header">
         <h1>Interview AI</h1>
-        <p>Practice your interview skills with AI-powered voice assistant</p>
+        <p>Enhance your interview skills with real-time feedback and practice.</p>
       </div>
       <div className="container">
         <div className={`blob ${speaking ? 'speaking' : ''}`}>
