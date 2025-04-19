@@ -37,6 +37,25 @@ PUBLIC_URL="/" npm run build:render
 
 cd ..
 
+# Prepare static files using our Python script
+echo "==> Running static file preparation script"
+python prepare-static.py
+
+# Check if static files were copied correctly
+echo "==> Verifying static files:"
+for dir in "api/static" "static"; do
+  if [ -d "$dir" ]; then
+    echo "==> $dir directory contents:"
+    ls -la $dir
+    if [ -d "$dir/static" ]; then
+      echo "==> $dir/static directory contents:"
+      ls -la $dir/static
+    fi
+  else
+    echo "==> $dir directory not found"
+  fi
+done
+
 # Set up static file serving from the backend
 echo "==> Setting up static file serving"
 
@@ -73,13 +92,6 @@ else
     mkdir -p api/static/static
     cp -r my-voice-assistant/build/static/* api/static/static/
   fi
-fi
-
-echo "==> Verifying static files:"
-if [ -d "backend/static/static" ]; then
-  ls -la backend/static/static
-elif [ -d "api/static/static" ]; then
-  ls -la api/static/static
 fi
 
 echo "==> Checking Python installation:"

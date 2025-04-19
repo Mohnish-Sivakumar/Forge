@@ -2,168 +2,114 @@ import os
 import sys
 import json
 import traceback
-import socket
-from http import HTTPStatus
-from api.index import handler, text_to_speech, list_available_voices
+from io import BytesIO
+from urllib.parse import parse_qs
+from api.index import test, text_to_speech, list_available_voices, generate_response
 
 # WSGI application function that Gunicorn will use
 def app(environ, start_response):
     """
-    WSGI application that adapts the BaseHTTPRequestHandler to work with Gunicorn.
-    This allows the existing handler class to work with Render's Gunicorn server.
+    WSGI application that directly calls the functions in api/index.py
+    instead of trying to instantiate the BaseHTTPRequestHandler.
     """
     # Extract request information from environ
     method = environ.get('REQUEST_METHOD', 'GET')
     path = environ.get('PATH_INFO', '/')
-    query = environ.get('QUERY_STRING', '')
+    query_string = environ.get('QUERY_STRING', '')
     
-    # Create a handler instance with mock request objects
-    # BaseHTTPRequestHandler needs (request, client_address, server)
-    class MockSocket:
-        def __init__(self):
-            self.socket = socket.socket()
-            
-        def makefile(self, *args, **kwargs):
-            return None
-            
-    class MockServer:
-        def __init__(self):
-            self.server_name = "localhost"
-            self.server_port = int(environ.get('SERVER_PORT', 8000))
-            
-    # Create mock objects needed by BaseHTTPRequestHandler
-    mock_socket = MockSocket()
-    mock_client_address = (environ.get('REMOTE_ADDR', '127.0.0.1'), 
-                          int(environ.get('REMOTE_PORT', '0')))
-    mock_server = MockServer()
+    # Parse the query string
+    query = parse_qs(query_string)
     
-    # Create a handler instance with the mock objects
-    h = handler(mock_socket, mock_client_address, mock_server)
+    # Set up CORS headers for all responses
+    cors_headers = [
+        ('Access-Control-Allow-Origin', '*'),
+        ('Access-Control-Allow-Methods', 'GET, POST, OPTIONS'),
+        ('Access-Control-Allow-Headers', 'Content-Type, Authorization'),
+        ('Access-Control-Expose-Headers', 'X-Response-Text')
+    ]
     
-    # Set path and method
-    h.path = path
-    h.command = method
-    
-    # Setup headers
-    h.headers = {
-        key[5:].replace('_', '-').lower(): value 
-        for key, value in environ.items() 
-        if key.startswith('HTTP_')
-    }
-    
-    # Simulate request handling
     try:
-        # Handle OPTIONS requests for CORS
+        # Handle OPTIONS requests (CORS preflight)
         if method == 'OPTIONS':
-            h._set_cors_headers()
-            headers = [(k, v) for k, v in h.headers_dict.items()] if hasattr(h, 'headers_dict') else [
+            start_response('200 OK', [
                 ('Content-Type', 'text/plain'),
-                ('Access-Control-Allow-Origin', '*'),
-                ('Access-Control-Allow-Methods', 'GET, POST, OPTIONS'),
-                ('Access-Control-Allow-Headers', 'Content-Type, Authorization')
-            ]
-            start_response('200 OK', headers)
+                *cors_headers
+            ])
             return [b'']
         
-        # For GET requests
+        # Handle GET requests
         elif method == 'GET':
-            # Setup response capturing
-            response_body = []
+            # Create an event dictionary similar to what Vercel would provide
+            event = {
+                'path': path,
+                'httpMethod': 'GET',
+                'headers': {k.lower(): v for k, v in environ.items() if k.startswith('HTTP_')},
+                'queryStringParameters': {k: v[0] for k, v in query.items()}
+            }
             
-            # Original function expects to write to wfile
-            class WfileMock:
-                def write(self, data):
-                    response_body.append(data)
+            # Call the test function that handles routing
+            response = test(event, {})
             
-            h.wfile = WfileMock()
+            # Extract status code and headers from the response
+            status_code = response.get('statusCode', 200)
+            headers = response.get('headers', {'Content-Type': 'application/json'})
             
-            # Call handler method
-            h.do_GET()
+            # Convert headers to the format expected by start_response
+            header_list = [(k, v) for k, v in headers.items()]
+            header_list.extend(cors_headers)
             
-            # Get response data
-            response_data = b''.join(response_body) if response_body else b'{"status":"ok"}'
+            # Start the response
+            start_response(f'{status_code} {get_status_text(status_code)}', header_list)
             
-            # Determine content type
-            content_type = 'application/json'
-            if isinstance(response_data, bytes) and response_data.startswith(b'\x89PNG'):
-                content_type = 'image/png'
-            elif isinstance(response_data, bytes) and response_data.startswith(b'RIFF'):
-                content_type = 'audio/wav'
-            
-            # Set headers for response
-            headers = [(k, v) for k, v in h.headers_dict.items()] if hasattr(h, 'headers_dict') else [
-                ('Content-Type', content_type),
-                ('Access-Control-Allow-Origin', '*'),
-                ('Access-Control-Allow-Methods', 'GET, POST, OPTIONS'),
-                ('Access-Control-Allow-Headers', 'Content-Type, Authorization')
-            ]
-            
-            start_response('200 OK', headers)
-            return [response_data]
+            # Return the response body
+            return [response.get('body', '{}').encode('utf-8')]
         
-        # For POST requests
+        # Handle POST requests
         elif method == 'POST':
-            # Read request body
+            # Read the request body
             content_length = int(environ.get('CONTENT_LENGTH', 0))
-            request_body = environ.get('wsgi.input').read(content_length) if content_length > 0 else b''
+            request_body = environ.get('wsgi.input').read(content_length) if content_length > 0 else b'{}'
             
-            # Setup input and output streams
-            class RfileMock:
-                def __init__(self, data):
-                    self.data = data
-                    self.position = 0
-                
-                def read(self, size=None):
-                    if size is None:
-                        result = self.data[self.position:]
-                        self.position = len(self.data)
-                    else:
-                        result = self.data[self.position:self.position + size]
-                        self.position += size
-                    return result
+            try:
+                # Parse JSON body
+                body = json.loads(request_body)
+            except:
+                body = {}
             
-            class WfileMock:
-                def __init__(self):
-                    self.data = []
-                
-                def write(self, data):
-                    self.data.append(data)
+            # Create an event dictionary similar to what Vercel would provide
+            event = {
+                'path': path,
+                'httpMethod': 'POST',
+                'headers': {k.lower(): v for k, v in environ.items() if k.startswith('HTTP_')},
+                'queryStringParameters': {k: v[0] for k, v in query.items()},
+                'body': json.dumps(body)
+            }
             
-            h.rfile = RfileMock(request_body)
-            h.wfile = WfileMock()
-            h.headers['content-type'] = environ.get('CONTENT_TYPE', 'application/json')
-            h.headers['content-length'] = str(content_length)
+            # Call the test function that handles routing
+            response = test(event, {})
             
-            # Call handler method
-            h.do_POST()
+            # Extract status code and headers from the response
+            status_code = response.get('statusCode', 200)
+            headers = response.get('headers', {'Content-Type': 'application/json'})
             
-            # Get response data
-            response_data = b''.join(h.wfile.data) if h.wfile.data else b'{"status":"ok"}'
+            # Convert headers to the format expected by start_response
+            header_list = [(k, v) for k, v in headers.items()]
+            header_list.extend(cors_headers)
             
-            # Determine content type
-            content_type = 'application/json'
-            if isinstance(response_data, bytes) and response_data.startswith(b'\x89PNG'):
-                content_type = 'image/png'
-            elif isinstance(response_data, bytes) and response_data.startswith(b'RIFF'):
-                content_type = 'audio/wav'
+            # Start the response
+            start_response(f'{status_code} {get_status_text(status_code)}', header_list)
             
-            # Set headers for response
-            headers = [(k, v) for k, v in h.headers_dict.items()] if hasattr(h, 'headers_dict') else [
-                ('Content-Type', content_type),
-                ('Access-Control-Allow-Origin', '*'),
-                ('Access-Control-Allow-Methods', 'GET, POST, OPTIONS'),
-                ('Access-Control-Allow-Headers', 'Content-Type, Authorization'),
-                ('Access-Control-Expose-Headers', 'X-Response-Text')
-            ]
-            
-            start_response('200 OK', headers)
-            return [response_data]
+            # Return the response body
+            return [response.get('body', '{}').encode('utf-8')]
         
         # Unsupported methods
         else:
-            headers = [('Content-Type', 'application/json')]
+            error_response = generate_response(405, {"error": "Method not allowed"})
+            headers = [(k, v) for k, v in error_response.get('headers', {}).items()]
+            headers.extend(cors_headers)
+            
             start_response('405 Method Not Allowed', headers)
-            return [json.dumps({"error": "Method not allowed"}).encode('utf-8')]
+            return [error_response.get('body', '{}').encode('utf-8')]
     
     except Exception as e:
         # Handle any exceptions
@@ -173,13 +119,31 @@ def app(environ, start_response):
         print(f"Error handling request: {error_message}")
         print(f"Traceback: {trace}")
         
-        headers = [('Content-Type', 'application/json')]
+        # Generate error response
+        headers = [
+            ('Content-Type', 'application/json'),
+            *cors_headers
+        ]
         start_response('500 Internal Server Error', headers)
         return [json.dumps({
             "error": error_message,
             "traceback": trace,
             "status": "error"
         }).encode('utf-8')]
+
+def get_status_text(status_code):
+    """Convert HTTP status code to text representation."""
+    status_texts = {
+        200: 'OK',
+        201: 'Created',
+        400: 'Bad Request',
+        401: 'Unauthorized',
+        403: 'Forbidden',
+        404: 'Not Found',
+        405: 'Method Not Allowed',
+        500: 'Internal Server Error'
+    }
+    return status_texts.get(status_code, 'Unknown')
 
 # For testing the handler directly
 if __name__ == "__main__":
