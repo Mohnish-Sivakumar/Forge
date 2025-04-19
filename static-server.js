@@ -1,12 +1,17 @@
 // Simple Express server for serving static files
 // Used as a fallback in case the Python server fails
 
-const express = require('express');
-const path = require('path');
-const fs = require('fs');
-const PORT = process.env.PORT || 5000;
+import express from 'express';
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
 
+const PORT = process.env.PORT || 5000;
 console.log("==> Starting static file server");
+
+// Get __dirname equivalent in ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Create Express app
 const app = express();

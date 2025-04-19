@@ -41,14 +41,14 @@ if [ -d "api/static" ]; then
   fi
 fi
 
-# Check for Node.js static server fallback option
-if [ "$USE_STATIC_SERVER" = "true" ]; then
-  echo "==> Starting static server with Node.js"
-  exec node static-server.js
-fi
-
+# Try to start the API server
+# Check for our new handler.py file first
+if [ -f "api/handler.py" ]; then
+  echo "==> Using api/handler.py WSGI adapter"
+  export PYTHONPATH=$PYTHONPATH:$(pwd)
+  exec gunicorn --timeout 120 api.handler:app --log-file=- --bind 0.0.0.0:$PORT --workers 2
 # If app.py exists in current directory, use it
-if [ -f "app.py" ]; then
+elif [ -f "app.py" ]; then
   echo "==> Starting app.py in current directory"
   exec gunicorn app:app --log-file=- --bind 0.0.0.0:$PORT --workers 2 --timeout 120
 # If app.py exists in backend directory, use it
@@ -56,11 +56,6 @@ elif [ -f "backend/app.py" ]; then
   echo "==> Starting app.py in backend directory"
   cd backend
   exec gunicorn app:app --log-file=- --bind 0.0.0.0:$PORT --workers 2 --timeout 120
-# Check for our new handler.py file first
-elif [ -f "api/handler.py" ]; then
-  echo "==> Using api/handler.py WSGI adapter"
-  export PYTHONPATH=$PYTHONPATH:$(pwd)
-  exec gunicorn --timeout 120 api.handler:app --log-file=- --bind 0.0.0.0:$PORT --workers 2
 # Otherwise, try to use api/index.py
 elif [ -f "api/index.py" ]; then
   echo "==> Using api/index.py as fallback"
@@ -70,7 +65,11 @@ elif [ -f "api/index.py" ]; then
   else
     exec gunicorn --timeout 120 handler:app --log-file=- --bind 0.0.0.0:$PORT
   fi
-# If all else fails, use the static server
+# If all fails, check if static server is explicitly requested
+elif [ "$USE_STATIC_SERVER" = "true" ]; then
+  echo "==> Starting static server with Node.js (explicitly requested)"
+  exec node static-server.js
+# Otherwise, use static server as a last resort
 else
   echo "==> No Python app found, falling back to static server"
   exec node static-server.js
