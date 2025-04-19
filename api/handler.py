@@ -2,6 +2,7 @@ import os
 import sys
 import json
 import traceback
+import socket
 from http import HTTPStatus
 from api.index import handler, text_to_speech, list_available_voices
 
@@ -16,8 +17,28 @@ def app(environ, start_response):
     path = environ.get('PATH_INFO', '/')
     query = environ.get('QUERY_STRING', '')
     
-    # Create a handler instance
-    h = handler()
+    # Create a handler instance with mock request objects
+    # BaseHTTPRequestHandler needs (request, client_address, server)
+    class MockSocket:
+        def __init__(self):
+            self.socket = socket.socket()
+            
+        def makefile(self, *args, **kwargs):
+            return None
+            
+    class MockServer:
+        def __init__(self):
+            self.server_name = "localhost"
+            self.server_port = int(environ.get('SERVER_PORT', 8000))
+            
+    # Create mock objects needed by BaseHTTPRequestHandler
+    mock_socket = MockSocket()
+    mock_client_address = (environ.get('REMOTE_ADDR', '127.0.0.1'), 
+                          int(environ.get('REMOTE_PORT', '0')))
+    mock_server = MockServer()
+    
+    # Create a handler instance with the mock objects
+    h = handler(mock_socket, mock_client_address, mock_server)
     
     # Set path and method
     h.path = path
