@@ -14,12 +14,17 @@ from pathlib import Path
 
 # Check if we're serving static files too (combined deployment)
 SERVE_STATIC = os.environ.get("SERVE_STATIC", "False").lower() in ("true", "1", "t")
+# Set the static folder to the React build directory
 static_folder = os.path.abspath("../my-voice-assistant/build") if SERVE_STATIC else None
 static_url_path = '' if SERVE_STATIC else None
 
+# Log the static folder path for debugging
+print(f"Static folder: {static_folder}")
+print(f"SERVE_STATIC: {SERVE_STATIC}")
+
 app = Flask(__name__, static_folder=static_folder, static_url_path=static_url_path)
 
-# Configure CORS to allow requests from development server
+# Configure CORS to allow requests from all origins
 CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
 
 # Setup debug logging

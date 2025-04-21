@@ -16,13 +16,19 @@ const getApiBaseUrl = () => {
     console.log('Using local development API base URL: http://localhost:5001');
     return 'http://localhost:5001';
   } 
-  // Production
+  // Production on Render
+  else if (hostname.includes('render.com')) {
+    // Don't append '/api' since we're using the same domain for frontend and API
+    baseUrl = `${protocol}//${hostname}${port ? ':' + port : ''}`;
+    console.log('Using Render production API base URL:', baseUrl);
+    return baseUrl;
+  }
+  // Other production environments
   else {
     baseUrl = `${protocol}//${hostname}${port ? ':' + port : ''}`;
+    console.log('Using production API base URL:', baseUrl);
+    return baseUrl;
   }
-  
-  console.log('API Base URL:', baseUrl + '/api');
-  return baseUrl + '/api';
 };
 
 // Speechify API key (provided by user)
