@@ -1,6 +1,12 @@
-const { spawn } = require('child_process');
-const path = require('path');
-const os = require('os');
+import { spawn } from 'child_process';
+import path from 'path';
+import os from 'os';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+// Get the current file path and directory
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 // Determine if we're on Windows to handle commands differently
 const isWindows = os.platform() === 'win32';

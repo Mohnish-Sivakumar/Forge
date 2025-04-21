@@ -3,12 +3,14 @@
 # Export environment variables
 export SERVE_STATIC=true
 export PYTHON_VERSION=3.12.9
+export SPEECHIFY_API_KEY="fwsjj7SjBEmJ9C058GN5NLEEIfwOga3tYKkftbo_TQE="
+export GEMINI_API_KEY="AIzaSyDrxMRoQ-Knm7gM_6YNHAiPhXoC6HN09S4"
 
 # Fix dependency issues by removing problematic packages first
 pip uninstall -y flask werkzeug
 
 # Install dependencies with specific versions
-pip install flask==2.2.3 flask-cors==3.0.10 werkzeug==2.2.3 google-generativeai==0.3.1 gunicorn==20.1.0 kokoro==0.9.4
+pip install flask==2.2.3 flask-cors==3.0.10 werkzeug==2.2.3 google-generativeai==0.3.1 gunicorn==20.1.0 requests>=2.28.0 psutil>=5.9.0
 
 # Print Python path and installed packages for debugging
 echo "==> Python path: $(which python)"
@@ -20,10 +22,9 @@ pip list
 cat > test_imports.py << 'EOF'
 import flask
 import werkzeug
-import kokoro
+import google.generativeai
 print(f"Flask version: {flask.__version__}")
 print(f"Werkzeug version: {werkzeug.__version__}")
-print(f"Kokoro version: {kokoro.__version__ if hasattr(kokoro, '__version__') else 'available'}")
 EOF
 
 echo "==> Testing imports:"

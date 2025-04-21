@@ -1,53 +1,31 @@
 #!/bin/bash
-# This is a simplified start script for Render deployment
+# Render start script with Voice RSS API and Deepgram integration
 
 # Set environment variables
 export SERVE_STATIC=true
+export VOICE_RSS_API_KEY="25b4ce640dcf4aaf8ce3af6bd9b2c3b9"
+export DEEPGRAM_API_KEY="your-deepgram-api-key"
 
-# Install dependencies again as a safeguard
+# Print information
+echo "=== Render Deployment Settings ==="
+echo "Using Voice RSS API: true"
+echo "Using Deepgram TTS API: true"
+echo "Voice RSS API Key: ${VOICE_RSS_API_KEY:0:5}...${VOICE_RSS_API_KEY:(-5)}" # Show only prefix and suffix for security
+echo "Deepgram API Key: ${DEEPGRAM_API_KEY:0:5}...${DEEPGRAM_API_KEY:(-5)}" # Show only prefix and suffix for security
+echo "================================="
+
+# Install dependencies
 echo "==> Installing required packages..."
-pip install flask==2.2.3 werkzeug==2.2.3 flask-cors==3.0.10 google-generativeai==0.3.1 kokoro==0.9.4
+pip install flask==2.2.3 werkzeug==2.2.3 flask-cors==3.0.10 google-generativeai==0.3.1 requests>=2.28.0 psutil>=5.9.0
 
 # Print debug information
 echo "==> Python version: $(python --version)"
 echo "==> Installed packages:"
-pip list | grep -E 'flask|werkzeug|kokoro|google-generativeai'
+pip list | grep -E 'flask|werkzeug|requests|psutil|google-generativeai'
 
-# Create a simple bootstrap script
-cat > bootstrap.py << 'EOF'
-import os
-import sys
-
-# Test import dependencies
-try:
-    import flask
-    import werkzeug
-    import kokoro
-    import google.generativeai as genai
-    
-    print(f"==> Flask version: {flask.__version__}")
-    print(f"==> Werkzeug version: {werkzeug.__version__}")
-    print(f"==> Kokoro imported successfully")
-    print(f"==> Google Generative AI imported successfully")
-except ImportError as e:
-    print(f"==> IMPORT ERROR: {e}")
-    sys.exit(1)
-
-# Then try to import our app
-try:
-    from backend.app import app
-    print("==> Successfully imported app")
-except Exception as e:
-    print(f"==> APP IMPORT ERROR: {e}")
-    raise
+# Create voice files directory (for backward compatibility)
+mkdir -p api/voice_files
 
 # Start the server
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    print(f"==> Starting server on port {port}")
-    app.run(host='0.0.0.0', port=port)
-EOF
-
-# Run the bootstrap script
-echo "==> Starting application with direct Python..."
-python bootstrap.py 
+echo "==> Starting application with TTS APIs enabled..."
+gunicorn api.index:handler --bind 0.0.0.0:$PORT --workers 1 --threads 2 --timeout 120 

@@ -1,5 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import './App.css';
+import { createClient } from '@deepgram/sdk';
 
 // Function to get the API base URL
 const getApiBaseUrl = () => {
@@ -10,9 +12,9 @@ const getApiBaseUrl = () => {
   let baseUrl = '';
   
   // Local development
-  if (hostname === 'localhost' || hostname === '127.0.0.1') {
-    // Using the proxy configured in package.json (port 5001)
-    baseUrl = '';
+  if (hostname === 'localhost' && port === '3000') {
+    console.log('Using local development API base URL: http://localhost:5001');
+    return 'http://localhost:5001';
   } 
   // Production
   else {
@@ -23,19 +25,53 @@ const getApiBaseUrl = () => {
   return baseUrl + '/api';
 };
 
+// Speechify API key (provided by user)
+const SPEECHIFY_API_KEY = "fwsjj7SjBEmJ9C058GN5NLEEIfwOga3tYKkftbo_TQE=";
+
+// Deepgram configuration - use environment variable in production
+const DEEPGRAM_API_KEY = process.env.REACT_APP_DEEPGRAM_API_KEY || 'your-deepgram-api-key';
+// Initialize Deepgram client - this will be used on the server side, not in the browser
+// For browser usage, we'll use a proxy
+
+// Utility function to check if a specific audio format is supported by the browser
+const isSupportedAudioFormat = (format) => {
+  const audio = new Audio();
+  return audio.canPlayType(`audio/${format}`) !== '';
+};
+
+// Utility function to decode base64 audio data
+const decodeAudioData = (base64Data) => {
+  try {
+    // Decode base64 string to binary
+    const binaryString = atob(base64Data);
+    const len = binaryString.length;
+    const bytes = new Uint8Array(len);
+    
+    for (let i = 0; i < len; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    
+    return bytes.buffer;
+  } catch (error) {
+    console.error('Error decoding audio data:', error);
+    return null;
+  }
+};
+
 // Constants for voice options
 const API_BASE_URL = getApiBaseUrl();
 console.log('Using API URL:', API_BASE_URL);
 
-// Voice options
+// Voice options for Speechify
 const VOICE_OPTIONS = [
-  { id: 'default', name: 'Standard English' },
-  { id: 'female1', name: 'Female Voice 1' },
-  { id: 'female2', name: 'Emotional Female' },
-  { id: 'male1', name: 'Narrative Male' },
-  { id: 'male2', name: 'Conversational Male' },
-  { id: 'british', name: 'British English' },
-  { id: 'australian', name: 'Australian English' }
+  { id: 'belinda', name: 'Belinda (Default)' },
+  { id: 'matthew', name: 'Matthew (Male)' },
+  { id: 'aria', name: 'Aria (Female 1)' },
+  { id: 'ryan', name: 'Ryan (Male 2)' },
+  { id: 'joseph', name: 'Joseph (Professional)' },
+  { id: 'tom', name: 'Tom (British)' },
+  { id: 'henry', name: 'Henry (British Male)' },
+  { id: 'jane', name: 'Jane (Female 2)' }
 ];
 
 function App() {
@@ -44,10 +80,18 @@ function App() {
   const [isWaiting, setIsWaiting] = useState(false);
   const [aiResponse, setAiResponse] = useState(''); // Store AI's text response
   const [error, setError] = useState(''); // Error state
-  const [selectedVoice, setSelectedVoice] = useState('default'); // Default voice
+  const [selectedVoice, setSelectedVoice] = useState('belinda'); // Default voice
   const [useVoiceApi, setUseVoiceApi] = useState(true); // Whether to use voice API
   const [loading, setLoading] = useState(false); // Loading state
   const [response, setResponse] = useState(''); // Response from API (may be redundant with aiResponse)
+  const [processingAudio, setProcessingAudio] = useState(false); // New state for audio processing
+  const [browserSupport, setBrowserSupport] = useState({ // New state to track browser support
+    speechRecognition: false,
+    speechSynthesis: false,
+    audioPlayback: false
+  });
+  const [interviewComplete, setInterviewComplete] = useState(false); // New state to track interview completion
+  const [conversationHistory, setConversationHistory] = useState([]); // Store conversation history
   
   const recognitionRef = useRef(null);
   const speechResultRef = useRef(''); // Store the speech result
@@ -55,7 +99,343 @@ function App() {
   const audioContextRef = useRef(null);
   const audioSourceRef = useRef(null);
 
-  // Helper function to speak text using browser's built-in speech synthesis
+  // Check browser capabilities on mount
+  useEffect(() => {
+    checkBrowserSupport();
+  }, []);
+
+  // Check browser capabilities for voice features
+  const checkBrowserSupport = () => {
+    const support = {
+      speechRecognition: !!(window.webkitSpeechRecognition || window.SpeechRecognition),
+      speechSynthesis: !!(window.speechSynthesis),
+      audioPlayback: !!(window.Audio && (new Audio()).canPlayType)
+    };
+    
+    console.log('Browser capabilities:', support);
+    setBrowserSupport(support);
+    
+    // Show error if basic features aren't supported
+    if (!support.audioPlayback) {
+      setError('Your browser does not support audio playback. Please use a modern browser.');
+    } else if (!support.speechRecognition) {
+      setError('Speech recognition is not supported in this browser. Try using Chrome, Edge, or Safari.');
+    } else if (!support.speechSynthesis) {
+      console.warn('Browser speech synthesis not available for fallback TTS.');
+    }
+
+    return support;
+  };
+
+  // Speak with Speechify TTS via proxy endpoint
+  const speakWithSpeechify = async (text, voiceId = 'belinda') => {
+    console.log(`Speaking with Speechify, voice: ${voiceId}, text length: ${text.length}`);
+    
+    if (!text) {
+      console.error('No text provided for speech');
+      return;
+    }
+    
+    try {
+      // Try using direct Speechify API first
+      const success = await speakWithSpeechifyDirect(text, voiceId);
+      if (success) {
+        return; // If direct call worked, don't use proxy
+      }
+      
+      setSpeaking(true);
+      setError('');
+      
+      // Create the API URL
+      const apiUrl = `${API_BASE_URL}/api/tts`;
+      
+      // Prepare request data
+      const requestData = {
+        text: text,
+        voice: voiceId
+      };
+      
+      console.log(`Fetching speech from ${apiUrl}`, requestData);
+      
+      // Set a timeout for the fetch request (10 seconds)
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+      
+      // Make the request to the API
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestData),
+        signal: controller.signal
+      });
+      
+      // Clear the timeout
+      clearTimeout(timeoutId);
+      
+      // Check if the request was successful
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('TTS API error:', response.status, errorText);
+        throw new Error(`API error: ${response.status} ${errorText}`);
+      }
+      
+      // Check the content type to determine how to handle the response
+      const contentType = response.headers.get('Content-Type') || '';
+      
+      if (contentType.includes('audio/')) {
+        // Handle audio response directly
+        const audioBlob = await response.blob();
+        const audioUrl = URL.createObjectURL(audioBlob);
+        
+        // Prepare the audio for playback
+        if (audioRef.current) {
+          audioRef.current.src = audioUrl;
+          audioRef.current.addEventListener('ended', () => {
+            setSpeaking(false);
+            URL.revokeObjectURL(audioUrl);
+          });
+          audioRef.current.addEventListener('error', (e) => {
+            console.error('Audio playback error:', e);
+            setSpeaking(false);
+            URL.revokeObjectURL(audioUrl);
+            throw new Error('Error playing audio');
+          });
+          
+          // Create a timeout to handle cases where audio doesn't play
+          audioTimeoutRef.current = setTimeout(() => {
+            console.warn('Audio playback timeout - falling back to browser TTS');
+            URL.revokeObjectURL(audioUrl);
+            setSpeaking(false);
+            speakWithBrowserTTS(text);
+          }, 10000);
+          
+          // Play the audio
+          const playPromise = audioRef.current.play();
+          if (playPromise) {
+            playPromise.then(() => {
+              console.log('Audio playback started');
+            }).catch(error => {
+              console.error('Audio play promise rejected:', error);
+              URL.revokeObjectURL(audioUrl);
+              setSpeaking(false);
+              speakWithBrowserTTS(text);
+            });
+          }
+        } else {
+          console.error('Audio element reference is not available');
+          setSpeaking(false);
+          speakWithBrowserTTS(text);
+        }
+      } else if (contentType.includes('application/json')) {
+        // Handle JSON response (likely an error)
+        const jsonData = await response.json();
+        console.error('TTS API returned JSON instead of audio:', jsonData);
+        throw new Error(jsonData.error || 'Invalid response from TTS API');
+      } else {
+        // Handle unexpected content type
+        console.error('Unexpected content type from TTS API:', contentType);
+        throw new Error(`Unexpected content type: ${contentType}`);
+      }
+    } catch (error) {
+      console.error('Error in speakWithSpeechify:', error);
+      setSpeaking(false);
+      
+      // Fallback to browser TTS
+      speakWithBrowserTTS(text);
+    }
+  };
+
+  // Direct call to Speechify API (no proxy)
+  const speakWithSpeechifyDirect = async (text, voiceId = 'belinda') => {
+    console.log(`Speaking directly with Speechify API, voice: ${voiceId}, text length: ${text.length}`);
+    
+    if (!text) {
+      console.error('No text provided for speech');
+      return false;
+    }
+    
+    try {
+      setSpeaking(true);
+      setError('');
+      
+      // Call the Speechify API directly
+      console.log(`Calling Speechify API directly with voice: ${voiceId}`);
+      
+      // First try the stream endpoint
+      try {
+        console.log("Making request to Speechify stream endpoint...");
+        const streamResponse = await fetch("https://api.sws.speechify.com/v1/audio/stream", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${SPEECHIFY_API_KEY}`,
+            "Accept": "audio/mpeg",
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            "input": text,
+            "voice_id": voiceId
+          }),
+        });
+        
+        console.log("Stream endpoint response status:", streamResponse.status);
+        
+        if (streamResponse.ok) {
+          const audioBlob = await streamResponse.blob();
+          const audioUrl = URL.createObjectURL(audioBlob);
+          
+          // Prepare the audio for playback
+          if (audioRef.current) {
+            audioRef.current.src = audioUrl;
+            audioRef.current.addEventListener('ended', () => {
+              setSpeaking(false);
+              URL.revokeObjectURL(audioUrl);
+            });
+            audioRef.current.addEventListener('error', (e) => {
+              console.error('Audio playback error:', e);
+              setSpeaking(false);
+              URL.revokeObjectURL(audioUrl);
+              throw new Error('Error playing audio');
+            });
+            
+            // Play the audio
+            const playPromise = audioRef.current.play();
+            if (playPromise) {
+              playPromise.then(() => {
+                console.log('Speechify audio playback started');
+              }).catch(error => {
+                console.error('Speechify audio play promise rejected:', error);
+                URL.revokeObjectURL(audioUrl);
+                setSpeaking(false);
+                return false;
+              });
+            }
+            return true;
+          }
+        } else {
+          console.log("Stream endpoint failed with status:", streamResponse.status);
+          const errorText = await streamResponse.text();
+          console.error("Stream endpoint error:", errorText);
+        }
+      } catch (streamError) {
+        console.error("Error calling stream endpoint:", streamError);
+      }
+      
+      // If stream endpoint fails, try the speech endpoint
+      try {
+        console.log("Stream endpoint failed, trying speech endpoint...");
+        console.log("Making request to Speechify speech endpoint...");
+        const speechResponse = await fetch("https://api.sws.speechify.com/v1/audio/speech", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${SPEECHIFY_API_KEY}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            "input": text,
+            "voice_id": voiceId
+          }),
+        });
+        
+        console.log("Speech endpoint response status:", speechResponse.status);
+        
+        if (speechResponse.ok) {
+          const jsonData = await speechResponse.json();
+          console.log("Speech endpoint response:", jsonData);
+          
+          if (jsonData.audio_url) {
+            // Play the audio from the URL
+            audioRef.current.src = jsonData.audio_url;
+            audioRef.current.addEventListener('ended', () => {
+              setSpeaking(false);
+            });
+            audioRef.current.addEventListener('error', (e) => {
+              console.error('Audio playback error:', e);
+              setSpeaking(false);
+              throw new Error('Error playing audio from URL');
+            });
+            
+            // Play the audio
+            const playPromise = audioRef.current.play();
+            if (playPromise) {
+              playPromise.then(() => {
+                console.log('Speechify audio playback started from URL');
+              }).catch(error => {
+                console.error('Speechify audio play promise rejected:', error);
+                setSpeaking(false);
+                return false;
+              });
+            }
+            return true;
+          } else if (jsonData.audio) {
+            // Base64 encoded audio data
+            const audioData = jsonData.audio;
+            const audioBlob = base64ToBlob(audioData, 'audio/mpeg');
+            const audioUrl = URL.createObjectURL(audioBlob);
+            
+            audioRef.current.src = audioUrl;
+            audioRef.current.addEventListener('ended', () => {
+              setSpeaking(false);
+              URL.revokeObjectURL(audioUrl);
+            });
+            audioRef.current.addEventListener('error', (e) => {
+              console.error('Audio playback error:', e);
+              setSpeaking(false);
+              URL.revokeObjectURL(audioUrl);
+              throw new Error('Error playing audio from base64');
+            });
+            
+            // Play the audio
+            const playPromise = audioRef.current.play();
+            if (playPromise) {
+              playPromise.then(() => {
+                console.log('Speechify audio playback started from base64');
+              }).catch(error => {
+                console.error('Speechify audio play promise rejected:', error);
+                URL.revokeObjectURL(audioUrl);
+                setSpeaking(false);
+                return false;
+              });
+            }
+            return true;
+          } else {
+            console.error("Speech endpoint returned no audio data:", jsonData);
+          }
+        } else {
+          console.log("Speech endpoint failed with status:", speechResponse.status);
+          const errorText = await speechResponse.text();
+          console.error("Speech endpoint error:", errorText);
+        }
+      } catch (speechError) {
+        console.error("Error calling speech endpoint:", speechError);
+      }
+      
+      // If we got here, both API endpoints failed
+      console.error('Both Speechify API endpoints failed');
+      return false;
+      
+    } catch (error) {
+      console.error('Error using Speechify API directly:', error);
+      setSpeaking(false);
+      return false;
+    }
+  };
+  
+  // Helper function to convert base64 to Blob
+  const base64ToBlob = (base64, mimeType) => {
+    const byteString = atob(base64);
+    const ab = new ArrayBuffer(byteString.length);
+    const ia = new Uint8Array(ab);
+    
+    for (let i = 0; i < byteString.length; i++) {
+      ia[i] = byteString.charCodeAt(i);
+    }
+    
+    return new Blob([ab], { type: mimeType });
+  };
+
+  // Modified speakWithBrowserTTS to handle text chunking better
   const speakWithBrowserTTS = (text) => {
     if (!text) {
       console.warn('No text provided for browser TTS');
@@ -261,7 +641,13 @@ function App() {
     return () => {
       stopAudioPlayback();
       if (audioContextRef.current) {
-        audioContextRef.current.close().catch(console.error);
+        try {
+          if (audioContextRef.current.state !== 'closed') {
+            audioContextRef.current.close().catch(console.error);
+          }
+        } catch (error) {
+          console.error('Error closing audio context:', error);
+        }
       }
     };
   }, []);
@@ -285,7 +671,34 @@ function App() {
     };
   }, []);
 
+  // Update the startNewInterview function to use a specific welcome message
+  const startNewInterview = () => {
+    setAiResponse('');
+    setInterviewComplete(false);
+    setConversationHistory([]);
+    setError('');
+    // Use the welcome message instead of generic "Start interview"
+    setTimeout(() => {
+      fetchTextAndVoiceResponse("Hello! Welcome to interview AI. Please state the occasion of ur interview and we shall proceed", selectedVoice);
+    }, 100);
+  };
+
+  // Reset the interview
+  const resetInterview = () => {
+    setAiResponse('');
+    setInterviewComplete(false);
+    setConversationHistory([]);
+    setError('');
+  };
+
+  // Enhanced toggleListening function
   const toggleListening = () => {
+    // If interview is complete, reset and start a new one
+    if (interviewComplete) {
+      resetInterview();
+      return;
+    }
+    
     // Clear any previous errors
     setError('');
     
@@ -295,14 +708,16 @@ function App() {
       setListening(false);
     } else {
       console.log('Initializing speech recognition');
-      // Check if speech recognition is supported
-      if (!window.webkitSpeechRecognition && !window.SpeechRecognition) {
-        setError('Speech recognition not supported in this browser');
-        return;
+      
+      // Check browser support again to ensure it's still available
+      const support = checkBrowserSupport();
+      if (!support.speechRecognition) {
+        return; // Error already set in checkBrowserSupport
       }
       
-      const SpeechRecognition = window.webkitSpeechRecognition || window.SpeechRecognition;
-      const recognition = new SpeechRecognition();
+      try {
+        const SpeechRecognition = window.webkitSpeechRecognition || window.SpeechRecognition;
+        const recognition = new SpeechRecognition();
       recognition.lang = 'en-US';
       recognition.interimResults = false;
       recognition.maxAlternatives = 1;
@@ -310,7 +725,8 @@ function App() {
 
       recognition.onstart = () => {
         console.log('Speech recognition started');
-        setAiResponse(''); // Clear previous response
+          setAiResponse(''); // Clear previous response
+          setError(''); // Clear any previous errors
       };
 
       recognition.onresult = (event) => {
@@ -327,18 +743,37 @@ function App() {
       recognition.onerror = (event) => {
         console.error('Recognition error:', event.error);
         setListening(false);
-        setError(`Speech recognition error: ${event.error}`);
+          
+          // Provide more helpful error messages
+          switch (event.error) {
+            case 'no-speech':
+              setError('No speech was detected. Please try again and speak clearly.');
+              break;
+            case 'aborted':
+              // This is a normal state when we stop listening intentionally
+              break;
+            case 'network':
+              setError('Network error occurred. Please check your internet connection.');
+              break;
+            case 'not-allowed':
+              setError('Speech recognition permission was denied. Please allow microphone access.');
+              break;
+            case 'service-not-allowed':
+              setError('Speech recognition service is not allowed. Please try a different browser.');
+              break;
+            default:
+              setError(`Speech recognition error: ${event.error}`);
+          }
       };
 
       recognition.onend = () => {
         console.log('Speech recognition ended');
+          setListening(false);
+          
         // Ensure UI updates are triggered
         if (speechResultRef.current) {
-          if (useVoiceApi) {
-            fetchVoiceResponse(speechResultRef.current, selectedVoice);
-          } else {
-            fetchTextResponse(speechResultRef.current);
-          }
+            // Process the user's speech and get AI response with voice
+            fetchTextAndVoiceResponse(speechResultRef.current, selectedVoice);
           speechResultRef.current = ''; // Clear the stored result
         }
       };
@@ -348,6 +783,10 @@ function App() {
       // Start recognition immediately
       recognition.start();
       setListening(true);
+      } catch (err) {
+        console.error('Error initializing speech recognition:', err);
+        setError(`Could not initialize speech recognition: ${err.message}`);
+      }
     }
   };
 
@@ -362,7 +801,7 @@ function App() {
     stopAudioPlayback();
     
     // Use the calculated API URL
-    const apiUrl = `${API_BASE_URL}/text`;
+    const apiUrl = `${API_BASE_URL}/api/text`;
     
     try {
       console.log('Sending request to API with text:', text);
@@ -439,196 +878,218 @@ function App() {
     }
   };
 
-  // Fetch voice response with Kokoro
-  const fetchVoiceResponse = async (inputText, selectedVoice) => {
-    // Reset audio if we have one already playing
-    if (window.activeAudio) {
-      try {
-        window.activeAudio.pause();
-        if (window.activeAudioURL) {
-          URL.revokeObjectURL(window.activeAudioURL);
-          window.activeAudioURL = null;
-        }
-        window.activeAudio = null;
-      } catch (e) {
-        console.error('Error stopping audio:', e);
-      }
-    }
-    
+  // Enhanced fetchTextAndVoiceResponse to track conversation
+  const fetchTextAndVoiceResponse = async (inputText, selectedVoice) => {
+    setIsWaiting(true);
+    setError(''); // Clear any previous errors
     setLoading(true);
-    setError('');
-    setSpeaking(false);
+    
+    console.log(`Processing input: "${inputText.substring(0, 30)}..."`);
     
     try {
-      console.log(`Fetching voice response for: "${inputText.substring(0, 30)}..." with voice: ${selectedVoice}`);
+      // Use Gemini API directly or through proxy if needed
+      let aiResponseText;
       
-      // Make request to API - Don't add /api/ again as it's already in API_BASE_URL
-      const response = await fetch(`${API_BASE_URL}/voice`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          text: inputText,
-          voice: selectedVoice
-        }),
-        // Increase timeout for larger audio files
-        timeout: 30000
-      });
+      // Try to use the backend API first
+      try {
+        // Make request to the text API to get AI's response
+        const textResponse = await fetch(`${API_BASE_URL}/api/text`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            text: inputText
+          }),
+        });
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
-      // Check content type to decide how to process the response
-      const contentType = response.headers.get('Content-Type') || '';
-      console.log('Response Content-Type:', contentType);
-      
-      // Handle binary audio response (WAV file)
-      if (contentType.includes('audio/') || contentType === 'application/octet-stream') {
-        console.log('Received binary audio data');
+        if (!textResponse.ok) {
+          console.warn(`HTTP error on text request! status: ${textResponse.status}`);
+          throw new Error(`HTTP error on text request! status: ${textResponse.status}`);
+        }
         
-        // Get the audio data as a blob
-        const audioBlob = await response.blob();
-        const audioUrl = URL.createObjectURL(audioBlob);
-        
-        // Create and set up audio element
-        const audio = new Audio(audioUrl);
-        window.activeAudio = audio;
-        window.activeAudioURL = audioUrl;
-        
-        // Set up event listeners
-        audio.oncanplaythrough = () => {
-          console.log('Audio can play through');
-          setSpeaking(true);
-          audio.play().catch(err => {
-            console.error('Audio playback error:', err);
-            setError('Audio playback failed. Using browser TTS instead.');
-            speakWithBrowserTTS(inputText);
-          });
-        };
-        
-        audio.onended = () => {
-          console.log('Audio playback finished');
-          setSpeaking(false);
-          setAiResponse(inputText);
-        };
-        
-        audio.onerror = (e) => {
-          console.error('Audio error:', e);
-          setError('Audio playback error. Using browser TTS instead.');
-          setSpeaking(false);
-          speakWithBrowserTTS(inputText);
-        };
-        
-        // Set timeout for audio loading
-        const audioTimeout = setTimeout(() => {
-          if (!audio.canPlayType(contentType) && !audio.canPlayType('audio/wav')) {
-            console.error('Browser cannot play this audio format');
-            setError('Browser cannot play the received audio format. Using browser TTS instead.');
-            speakWithBrowserTTS(inputText);
-          }
-        }, 10000); // 10 second timeout
-        
-        // Clear timeout when audio loads
-        audio.onloadeddata = () => {
-          clearTimeout(audioTimeout);
-        };
-      } 
-      // Handle JSON response
-      else {
         // Parse the JSON response
-        const data = await response.json();
-        console.log('Response data:', data);
+        const textData = await textResponse.json();
         
-        if (data.error) {
-          throw new Error(data.error);
+        if (!textData.response) {
+          throw new Error('No response text received from API');
         }
         
-        if (data.audio) {
-          console.log('Received audio data in JSON response');
-          
-          // Process the audio data
-          let audioData;
-          if (data.compressed && window.pako) {
-            // Decompress using pako if available
-            console.log('Decompressing audio data...');
-            try {
-              const compressedData = Uint8Array.from(atob(data.audio), c => c.charCodeAt(0));
-              audioData = window.pako.inflate(compressedData);
-            } catch (e) {
-              console.error('Error decompressing audio:', e);
-              throw new Error('Failed to decompress audio data');
-            }
-          } else {
-            // Convert base64 to binary
-            audioData = Uint8Array.from(atob(data.audio), c => c.charCodeAt(0));
-          }
-          
-          // Create audio blob and URL
-          const audioBlob = new Blob([audioData], { type: 'audio/wav' });
-          const audioUrl = URL.createObjectURL(audioBlob);
-          
-          // Create and play the audio
-          const audio = new Audio(audioUrl);
-          window.activeAudio = audio;
-          window.activeAudioURL = audioUrl;
-          
-          // Set up event listeners
-          audio.oncanplaythrough = () => {
-            console.log('Audio can play through');
-            setSpeaking(true);
-            audio.play().catch(err => {
-              console.error('Audio playback error:', err);
-              setError('Audio playback failed. Using browser TTS instead.');
-              speakWithBrowserTTS(inputText);
-            });
-          };
-          
-          audio.onended = () => {
-            console.log('Audio playback finished');
-            setSpeaking(false);
-            setAiResponse(inputText);
-          };
-          
-          audio.onerror = (e) => {
-            console.error('Audio error:', e);
-            setError('Audio playback error. Using browser TTS instead.');
-            setSpeaking(false);
-            speakWithBrowserTTS(inputText);
-          };
-          
-          // Set timeout for audio loading
-          const audioTimeout = setTimeout(() => {
-            console.error('Audio loading timeout');
-            setError('Audio loading timeout. Using browser TTS instead.');
-            speakWithBrowserTTS(inputText);
-          }, 10000); // 10 second timeout
-          
-          // Clear timeout when audio loads
-          audio.onloadeddata = () => {
-            clearTimeout(audioTimeout);
-          };
-        } else {
-          // No audio data in response, use browser TTS fallback
-          console.log('No audio data received. Using browser TTS.');
-          speakWithBrowserTTS(inputText);
-        }
+        // Extract the AI's response text
+        aiResponseText = textData.response;
+      } catch (textApiError) {
+        console.error("Error using backend text API:", textApiError);
+        
+        // Fallback text - this is just a placeholder since we can't generate AI text without the backend
+        aiResponseText = "I'm currently having trouble connecting to my response system. However, I'm still able to help you practice interviews. What kind of interview are you preparing for?";
       }
       
+      // Update the UI with the AI's text response
+      setAiResponse(aiResponseText);
+      
+      // Update conversation history
+      setConversationHistory(prev => [
+        ...prev, 
+        { 
+          role: 'user', 
+          content: inputText 
+        },
+        { 
+          role: 'assistant', 
+          content: aiResponseText 
+        }
+      ]);
+      
+      // Check if this is an interview completion
+      if (aiResponseText.toLowerCase().includes('thank you for your time') ||
+          aiResponseText.toLowerCase().includes('this concludes our interview') ||
+          aiResponseText.includes('interview is complete')) {
+        console.log('Interview appears to be complete');
+        setInterviewComplete(true);
+      }
+      
+      // Now use Speechify API directly for TTS - this is the key part we're fixing
+      // Using direct Speechify API call with the provided API key
+      console.log("Using Speechify API directly with key:", SPEECHIFY_API_KEY.substring(0, 5) + "..." + SPEECHIFY_API_KEY.substring(SPEECHIFY_API_KEY.length - 5));
+      
+      const speechifySuccess = await speakWithSpeechifyDirect(aiResponseText, selectedVoice);
+      
+      if (speechifySuccess) {
+        console.log('Successfully used Speechify API directly');
+        setIsWaiting(false);
+        setLoading(false);
+        return;
+      }
+      
+      // If Speechify failed, try VoiceRSS directly
+      const voiceRssSuccess = await speakWithVoiceRSS(aiResponseText, selectedVoice);
+      
+      // If both direct API calls fail, fall back to proxy or browser TTS
+      if (!speechifySuccess && !voiceRssSuccess) {
+        console.log('Direct API calls failed, falling back to proxy');
+        speakWithSpeechify(aiResponseText, selectedVoice);
+      }
+      
+      setIsWaiting(false);
       setLoading(false);
     } catch (error) {
-      console.error('Error fetching voice response:', error);
-      setError(`Error: ${error.message}`);
+      console.error('Error fetching text response:', error);
+      setError(`Error getting AI response: ${error.message}`);
+      setIsWaiting(false);
       setLoading(false);
-      // Fallback to browser TTS
-      speakWithBrowserTTS(inputText);
+    }
+  };
+
+  // Direct call to VoiceRSS API (using the SDK included in public/index.html)
+  const speakWithVoiceRSS = async (text, voiceId = 'en-us') => {
+    console.log(`Speaking with VoiceRSS, voice: ${voiceId}, text length: ${text.length}`);
+    
+    if (!text) {
+      console.error('No text provided for speech');
+      return false;
+    }
+    
+    // Map Speechify voice IDs to VoiceRSS voices
+    const voiceMap = {
+      'belinda': 'en-us',
+      'matthew': 'en-us',
+      'aria': 'en-us',
+      'ryan': 'en-us',
+      'joseph': 'en-us',
+      'tom': 'en-gb',
+      'henry': 'en-gb',
+      'jane': 'en-us'
+    };
+    
+    // Get the mapped voice or default to en-us
+    const mappedVoice = voiceMap[voiceId] || 'en-us';
+    
+    try {
+      setSpeaking(true);
+      setError('');
+      
+      // Check if VoiceRSS SDK is available
+      if (typeof VoiceRSS === 'undefined') {
+        console.error('VoiceRSS SDK not available');
+        return false;
+      }
+      
+      console.log(`Using VoiceRSS with voice: ${mappedVoice}`);
+      
+      // The VoiceRSS SDK is already set up to play audio directly
+      VoiceRSS.speech({
+        key: '25b4ce640dcf4aaf8ce3af6bd9b2c3b9', // VoiceRSS API key
+        src: text,
+        hl: mappedVoice,
+        v: 'Mary', // Voice name
+        r: 0, // Rate
+        c: 'mp3', // Codec
+        f: '44khz_16bit_stereo', // Format
+        ssml: false,
+        b64: false,
+        callback: function(error) {
+          if (error) {
+            console.error('VoiceRSS error:', error);
+            setSpeaking(false);
+            return false;
+          } else {
+            // Success, speech is playing
+            console.log('VoiceRSS speech playing');
+            
+            // Since VoiceRSS doesn't provide a way to know when audio completes,
+            // we'll use a timeout based on text length
+            const estimatedDuration = Math.max(2000, text.length * 80); // Rough estimate: 80ms per character
+            setTimeout(() => {
+              setSpeaking(false);
+            }, estimatedDuration);
+            
+            return true;
+          }
+        }
+      });
+      
+      return true;
+      
+    } catch (error) {
+      console.error('Error using VoiceRSS:', error);
+      setSpeaking(false);
+      return false;
+    }
+  };
+
+  // Update the fetchVoiceResponse function to use Speechify directly
+  const fetchVoiceResponse = async (text) => {
+    // Try to use Speechify API directly first
+    const speechifySuccess = await speakWithSpeechifyDirect(text, selectedVoice);
+    
+    if (speechifySuccess) {
+      console.log('Successfully used Speechify API directly');
+      return;
+    }
+    
+    // If Speechify failed, try VoiceRSS directly
+    const voiceRssSuccess = await speakWithVoiceRSS(text, selectedVoice);
+    
+    // If both direct API calls fail, fall back to proxy or browser TTS
+    if (!speechifySuccess && !voiceRssSuccess) {
+      console.log('Direct API calls failed, falling back to proxy');
+      speakWithSpeechify(text, selectedVoice);
     }
   };
 
   return (
     <div className="App">
       <div className="background-square"></div>
+      
+      {/* Navigation Bar */}
+      <nav className="navbar">
+        <div className="navbar-brand">Interview AI</div>
+        <div className="navbar-links">
+          <Link to="/" className="nav-link active">Home</Link>
+          <Link to="/opportunities" className="nav-link">Internship/Job Opportunities</Link>
+        </div>
+      </nav>
+      
       <div className="header">
         <h1>Interview AI</h1>
         <p>Enhance your interview skills with real-time feedback and practice.</p>
@@ -636,12 +1097,7 @@ function App() {
       <div className="container">
         <div className={`blob ${speaking ? 'speaking' : ''}`}>
           <div className="blob-inner">
-            {/* Display AI response text */}
-            {aiResponse && (
-              <div className="ai-response-text">
-                <p>{aiResponse}</p>
-              </div>
-            )}
+            {/* AI response text removed as requested */}
           </div>
         </div>
         
@@ -652,6 +1108,7 @@ function App() {
               type="checkbox"
               checked={useVoiceApi}
               onChange={() => setUseVoiceApi(!useVoiceApi)}
+              disabled={speaking || isWaiting}
             />
             Use enhanced voice
           </label>
@@ -671,24 +1128,52 @@ function App() {
           )}
         </div>
         
-        <button 
-          className={`mic-button ${listening ? 'listening' : ''}`}
-          onClick={toggleListening} 
-          disabled={speaking || isWaiting}
-        >
-          <div className="mic-icon"></div>
-        </button>
+        {/* Only show mic button if the interview has started */}
+        {conversationHistory.length > 0 && (
+          <button 
+            className={`mic-button ${listening ? 'listening' : ''} ${processingAudio ? 'processing' : ''} ${interviewComplete ? 'complete' : ''}`}
+            onClick={interviewComplete ? startNewInterview : toggleListening} 
+            disabled={speaking || isWaiting || processingAudio}
+            title={interviewComplete ? "Start new interview" : 
+                  (browserSupport.speechRecognition ? "Click to speak" : 
+                  "Speech recognition not supported in this browser")}
+          >
+            <div className={`mic-icon ${interviewComplete ? 'restart-icon' : ''}`}></div>
+          </button>
+        )}
 
         {isWaiting && <div className="waiting-indicator"></div>}
+        {processingAudio && <div className="processing-indicator">Processing audio...</div>}
         
         <div className="status-text">
-          {listening ? 'Listening...' : speaking ? 'Speaking...' : 'Click to speak'}
+          {interviewComplete ? 'Interview complete! Click to start a new one' :
+           listening ? 'Listening...' : 
+           speaking ? 'Speaking...' : 
+           processingAudio ? 'Processing...' : 
+           conversationHistory.length === 0 ? 'Click to start interview' : 'Click to speak'}
         </div>
+        
+        {/* Start interview button (shown only initially) */}
+        {conversationHistory.length === 0 && !listening && !speaking && !isWaiting && !processingAudio && (
+          <button 
+            className="start-interview-button"
+            onClick={startNewInterview}
+          >
+            Start Interview
+          </button>
+        )}
         
         {/* Display error message if present */}
         {error && (
           <div className="error-message">
             <p>{error}</p>
+          </div>
+        )}
+
+        {/* Browser compatibility warning */}
+        {!browserSupport.speechRecognition && (
+          <div className="compatibility-warning">
+            <p>Speech recognition is not supported in this browser. Please use Chrome, Edge, or Safari for the best experience.</p>
           </div>
         )}
       </div>
