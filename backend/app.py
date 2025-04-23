@@ -238,6 +238,7 @@ def text_response():
             return jsonify({"status": "error", "message": "No data provided"}), 400
             
         user_input = data.get('text', '')
+        purpose = data.get('purpose', '')
         
         if not user_input:
             return jsonify({"status": "error", "message": "No input text provided"}), 400
@@ -246,12 +247,29 @@ def text_response():
         if "Welcome to interview AI" in user_input:
             # Return the welcome message directly without sending to AI
             return jsonify({"status": "success", "response": user_input})
+        
+        # Handle essay feedback if that's the purpose
+        if purpose == 'essay_feedback':
+            prompt = user_input
+            response_text = model.generate_content(prompt).text
+            return jsonify({"status": "success", "response": response_text})
             
+        # For interview questions, use a more specific prompt
         prompt = f"""
-        Respond to: {user_input}
-        Important: Provide your response as a continuous paragraph without line breaks or bullet points.
-        Keep punctuation minimal, using mostly commas and periods. Your response must be concise and strictly limited to a maximum of 30 words. Remember you're an 
-        interviewer. Ask the questions, and provide feedback after hearing the response from the user.
+        You are a professional interview coach conducting a mock interview. 
+
+        User context or response: {user_input}
+
+        If the user is explaining what type of interview they need help with (like "robotics team captain interview" or "software engineer interview"):
+          - Do NOT ask for more context or clarification
+          - Immediately ask a relevant first interview question for that specific role
+          - Tailor your question to be appropriate for the exact position they mentioned
+          
+        If the user is answering a previous interview question:
+          - Provide brief, specific feedback on their answer (what was good, what could be improved)
+          - Then ask a logical follow-up question to continue the interview
+          
+        Keep your response under 60 words, formatted as a single paragraph with natural conversational tone.
         """
         
         response_text = model.generate_content(prompt).text
@@ -309,10 +327,20 @@ def voice_response():
             
         # Generate response with Gemini
         prompt = f"""
-        Respond to: {user_input}
-        Important: Provide your response as a continuous paragraph without line breaks or bullet points.
-        Keep punctuation minimal, using mostly commas and periods. Your response must be concise and strictly limited to a maximum of 50 words. Remember you're an 
-        interviewer. Ask the questions, and provide feedback after hearing the response from the user.
+        You are a professional interview coach conducting a mock interview. 
+
+        User context or response: {user_input}
+
+        If the user is explaining what type of interview they need help with (like "robotics team captain interview" or "software engineer interview"):
+          - Do NOT ask for more context or clarification
+          - Immediately ask a relevant first interview question for that specific role
+          - Tailor your question to be appropriate for the exact position they mentioned
+          
+        If the user is answering a previous interview question:
+          - Provide brief, specific feedback on their answer (what was good, what could be improved)
+          - Then ask a logical follow-up question to continue the interview
+          
+        Keep your response under 60 words, formatted as a single paragraph with natural conversational tone.
         """
         
         response_text = model.generate_content(prompt).text
