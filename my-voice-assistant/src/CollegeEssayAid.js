@@ -47,15 +47,19 @@ function CollegeEssayAid() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ 
-          text: `You are an expert college essay reviewer. Please analyze this college essay and provide SPECIFIC, DETAILED feedback using a mix of short paragraphs and bullet points. Focus on:
+          text: `You are an expert college essay reviewer. Please analyze this college essay and provide EXTREMELY COMPREHENSIVE AND DETAILED feedback with AT LEAST 8-10 TOTAL PARAGRAPHS of analysis spread across multiple sections. Your response MUST include:
           
-1. Specific sentences that need improvement (quote them exactly and suggest alternatives)
-2. Clarity and flow issues (point out exactly where these occur)
-3. Content development (identify specific areas that need more detail or examples)
-4. Structure and organization (suggest specific structural changes if needed)
-5. Grammar and style issues (be precise about which words or phrases to fix)
+1. OVERALL ASSESSMENT (at least 2 full paragraphs): Thoroughly evaluate the essay's strengths, potential, and general impression. First paragraph should discuss strengths, and second paragraph should cover overall weaknesses.
 
-Format your response with clear section headings (e.g., "Strengths:", "Areas for Improvement:", "Specific Suggestions:"), and use bullet points for detailed recommendations. DO NOT rewrite the entire essay.
+2. STRUCTURE AND ORGANIZATION (at least 2 full paragraphs): Provide detailed analysis of how well the essay is structured, with specific examples from the beginning, middle, and end of the essay. Discuss both what works and what needs improvement.
+
+3. CONTENT DEVELOPMENT (at least 2 full paragraphs): Critically analyze the depth, authenticity, and effectiveness of the content. Provide specific examples from the text showing where content is strong and where it needs more development.
+
+4. LANGUAGE AND STYLE (at least 2 full paragraphs): Thoroughly evaluate the language, style, grammar, and mechanics. Quote at least 3-4 specific sentences from the essay and provide suggestions for improvement.
+
+5. RECOMMENDATIONS (at least 2 full paragraphs): Provide specific, actionable recommendations for improvement. First paragraph should focus on big-picture improvements, and second paragraph should address specific details.
+
+FOR EACH SECTION, YOU MUST WRITE MULTIPLE WELL-DEVELOPED PARAGRAPHS (not just bullet points or short sentences). A proper paragraph contains at least 4-5 sentences. Your analysis should be specific to this essay, not generic advice. DO NOT be brief - be thorough and detailed.
 
 Here's the essay: ${essayText}`,
           purpose: 'essay_feedback'

@@ -94,46 +94,46 @@ const SAMPLE_OPPORTUNITIES = [
   },
   {
     id: 9,
-    title: "High School Engineering Internship",
-    company: "Boeing",
-    location: "Seattle, WA",
+    title: "UI/UX Design Intern",
+    company: "Adobe",
+    location: "San Jose, CA",
     type: "internship",
-    educationLevel: ["high school"],
-    field: ["engineering", "aviation", "manufacturing"],
-    description: "Learn about aerospace engineering and manufacturing processes from industry professionals.",
-    url: "https://jobs.boeing.com/internships"
+    educationLevel: ["college", "undergraduate", "graduate"],
+    field: ["design", "UI/UX", "graphic design"],
+    description: "Apply your design skills to create beautiful and intuitive user interfaces for Adobe products.",
+    url: "https://www.adobe.com/careers/university.html"
   },
   {
     id: 10,
-    title: "High School Lab Assistant",
+    title: "Product Management Intern",
+    company: "Amazon",
+    location: "Seattle, WA",
+    type: "internship",
+    educationLevel: ["college", "undergraduate", "graduate"],
+    field: ["product management", "business", "technology"],
+    description: "Drive the development and launch of new features and products that millions of customers will use.",
+    url: "https://www.amazon.jobs/en/teams/internships-for-students"
+  },
+  {
+    id: 11,
+    title: "High School Science Program",
     company: "National Institutes of Health",
     location: "Bethesda, MD",
     type: "internship",
     educationLevel: ["high school"],
     field: ["science", "biology", "research"],
-    description: "Work alongside scientists in a lab environment and assist with biomedical research projects.",
-    url: "https://www.training.nih.gov/programs/high_school_summer"
-  },
-  {
-    id: 11,
-    title: "Technology Intern for High School Students",
-    company: "IBM",
-    location: "Multiple Locations",
-    type: "internship",
-    educationLevel: ["high school"],
-    field: ["computer science", "technology", "IT"],
-    description: "Gain exposure to cutting-edge technology and contribute to real projects at IBM.",
-    url: "https://www.ibm.com/us-en/employment/entrylevel/"
+    description: "Participate in hands-on research projects alongside NIH scientists and gain exposure to biomedical research.",
+    url: "https://www.training.nih.gov/programs/hs-sip"
   },
   {
     id: 12,
-    title: "Environmental Science Internship",
+    title: "Environmental Science Intern",
     company: "Environmental Protection Agency",
     location: "Washington, DC",
     type: "internship",
-    educationLevel: ["high school", "college"],
-    field: ["environmental science", "research", "science"],
-    description: "Participate in environmental research and conservation projects with government scientists.",
+    educationLevel: ["high school", "college", "undergraduate"],
+    field: ["environmental science", "biology", "chemistry"],
+    description: "Contribute to projects that help protect the environment and human health through scientific research.",
     url: "https://www.epa.gov/careers/student-internships"
   },
   {
@@ -179,6 +179,94 @@ const SAMPLE_OPPORTUNITIES = [
     field: ["robotics", "engineering", "programming"],
     description: "Work with cutting-edge robotics technology and learn about mechanical and software engineering.",
     url: "https://www.bostondynamics.com/careers"
+  },
+  {
+    id: 17,
+    title: "Cybersecurity Analyst Intern",
+    company: "Cisco Systems",
+    location: "San Jose, CA",
+    type: "internship",
+    educationLevel: ["college", "undergraduate", "graduate"],
+    field: ["cybersecurity", "computer science", "IT"],
+    description: "Help protect networks and data from cyber threats while learning from industry professionals.",
+    url: "https://www.cisco.com/c/en/us/about/careers/working-at-cisco/students-and-new-graduate-programs.html"
+  },
+  {
+    id: 18,
+    title: "App Developer Internship",
+    company: "Apple",
+    location: "Cupertino, CA",
+    type: "internship",
+    educationLevel: ["college", "undergraduate", "graduate"],
+    field: ["mobile development", "software engineering", "UI design"],
+    description: "Develop innovative apps for iOS devices and work with cutting-edge Apple technologies.",
+    url: "https://www.apple.com/careers/us/students.html"
+  },
+  {
+    id: 19,
+    title: "Mechanical Engineering Intern",
+    company: "Tesla",
+    location: "Fremont, CA",
+    type: "internship",
+    educationLevel: ["college", "undergraduate", "graduate"],
+    field: ["mechanical engineering", "automotive", "design"],
+    description: "Work on revolutionary electric vehicles and contribute to sustainable transportation solutions.",
+    url: "https://www.tesla.com/careers/students"
+  },
+  {
+    id: 20,
+    title: "Climate Research Program",
+    company: "NOAA",
+    location: "Boulder, CO",
+    type: "internship",
+    educationLevel: ["college", "undergraduate", "graduate"],
+    field: ["climate science", "environmental science", "research"],
+    description: "Participate in research related to climate change, weather prediction, and environmental monitoring.",
+    url: "https://www.noaa.gov/office-education/opportunities"
+  },
+  {
+    id: 21,
+    title: "Remote Software Engineering Intern",
+    company: "Twitter",
+    location: "Remote",
+    type: "internship",
+    educationLevel: ["college", "undergraduate", "graduate"],
+    field: ["software engineering", "web development", "computer science"],
+    description: "Work remotely on Twitter's platform and learn about scaling technology to millions of users.",
+    url: "https://careers.twitter.com/en/university.html"
+  },
+  {
+    id: 22,
+    title: "Game Development Internship",
+    company: "Electronic Arts",
+    location: "Redwood City, CA",
+    type: "internship",
+    educationLevel: ["college", "undergraduate", "graduate"],
+    field: ["game development", "software engineering", "3D graphics"],
+    description: "Gain experience in game development and contribute to popular EA titles.",
+    url: "https://www.ea.com/careers/students"
+  },
+  {
+    id: 23,
+    title: "Artificial Intelligence Researcher",
+    company: "OpenAI",
+    location: "San Francisco, CA",
+    type: "job",
+    educationLevel: ["graduate", "phd"],
+    field: ["AI", "machine learning", "computer science"],
+    description: "Research and develop cutting-edge AI technologies that have a positive impact on society.",
+    url: "https://openai.com/careers"
+  },
+  {
+    id: 24,
+    title: "Virtual Reality Intern",
+    company: "Meta",
+    location: "Menlo Park, CA",
+    type: "internship",
+    educationLevel: ["college", "undergraduate", "graduate"],
+    field: ["VR/AR", "software engineering", "3D design"],
+    description: "Help build the future of virtual reality experiences and metaverse technologies.",
+    url: "https://www.metacareers.com/students-and-grads"
   }
 ];
 
@@ -189,7 +277,8 @@ const EDUCATION_LEVELS = [
   { value: "college", label: "College Student" },
   { value: "undergraduate", label: "Undergraduate" },
   { value: "graduate", label: "Graduate Student" },
-  { value: "bootcamp", label: "Bootcamp" }
+  { value: "bootcamp", label: "Bootcamp" },
+  { value: "phd", label: "PhD Student" }
 ];
 
 // Interest/Field options
@@ -209,8 +298,24 @@ const FIELDS = [
   "IT",
   "Communications",
   "Statistics",
-  "Biology"
+  "Biology",
+  "Cybersecurity",
+  "Mobile Development",
+  "Game Development",
+  "Design",
+  "UI/UX",
+  "Robotics",
+  "VR/AR",
+  "Environmental Science",
+  "Healthcare",
+  "Journalism"
 ];
+
+// Extract unique locations from opportunities
+const LOCATIONS = ["All Locations", "Remote", ...Array.from(new Set(
+  SAMPLE_OPPORTUNITIES.map(opp => opp.location)
+  .filter(location => location !== "Remote" && location !== "Various Locations")
+))].sort();
 
 function Opportunities() {
   const [location, setLocation] = useState('');
@@ -220,8 +325,9 @@ function Opportunities() {
   
   // Filter opportunities based on search criteria
   const filteredOpportunities = SAMPLE_OPPORTUNITIES.filter(opportunity => {
-    const locationMatch = !location || 
-      opportunity.location.toLowerCase().includes(location.toLowerCase());
+    const locationMatch = !location || location === "All Locations" || 
+      opportunity.location === location || 
+      (location === "Remote" && opportunity.location === "Remote");
     
     const educationMatch = !educationLevel || 
       opportunity.educationLevel.includes(educationLevel.toLowerCase());
@@ -265,13 +371,16 @@ function Opportunities() {
             <div className="search-filters">
               <div className="filter-group">
                 <label htmlFor="location">Location</label>
-                <input 
-                  type="text" 
-                  id="location" 
-                  placeholder="City, State, or Remote"
+                <select 
+                  id="location"
                   value={location}
                   onChange={(e) => setLocation(e.target.value)}
-                />
+                >
+                  <option value="">All Locations</option>
+                  {LOCATIONS.map(loc => (
+                    <option key={loc} value={loc}>{loc}</option>
+                  ))}
+                </select>
               </div>
               
               <div className="filter-group">
@@ -354,19 +463,24 @@ function Opportunities() {
         )}
         
         <div className="opportunities-info">
-          <h2>How to Make the Most of Your Search</h2>
+          <h2>Resources to Help Your Career</h2>
           <div className="info-cards">
             <div className="info-card">
-              <h3>For High School Students</h3>
-              <p>Look for research programs, shadowing opportunities, and summer internships that welcome high school students. These experiences can help you explore potential career paths and build your college applications.</p>
+              <h3>Resume Building</h3>
+              <p>A strong resume is essential for landing internships and jobs. Highlight relevant coursework, projects, and skills that match the position you're applying for.</p>
+              <p><a href="https://www.indeed.com/career-advice/resumes-cover-letters/student-resume" target="_blank" rel="noopener noreferrer">Learn more about creating an effective resume →</a></p>
             </div>
+            
             <div className="info-card">
-              <h3>For College Students</h3>
-              <p>Internships, co-ops, and research positions can provide valuable experience in your field of study. Many companies offer opportunities specifically for undergraduate and graduate students.</p>
+              <h3>Interview Preparation</h3>
+              <p>Practice answering common interview questions and research the company before your interview. Prepare examples that showcase your skills and experiences.</p>
+              <p><a href="https://www.themuse.com/advice/interview-questions-and-answers" target="_blank" rel="noopener noreferrer">Learn more about interview techniques →</a></p>
             </div>
+            
             <div className="info-card">
-              <h3>Prepare for Interviews</h3>
-              <p>Once you find opportunities that interest you, use our <Link to="/">Interview AI</Link> to practice your interview skills and receive valuable feedback.</p>
+              <h3>Networking</h3>
+              <p>Building a professional network can help you discover opportunities and get referrals. Attend career fairs, join industry-related clubs, and connect with professionals on LinkedIn.</p>
+              <p><a href="https://www.linkedin.com/learning/topics/career-development" target="_blank" rel="noopener noreferrer">Learn more about networking strategies →</a></p>
             </div>
           </div>
         </div>

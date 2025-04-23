@@ -39,7 +39,7 @@
 .opportunities-container {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 2rem;
+  padding: 3rem;
   margin-top: 5rem;
   z-index: 1;
   width: 100%;
@@ -63,7 +63,7 @@
 .search-section {
   background-color: rgba(255, 255, 255, 0.8);
   border-radius: 12px;
-  padding: 2rem;
+  padding: 2.5rem;
   margin-bottom: 2rem;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   backdrop-filter: blur(10px);
@@ -158,7 +158,7 @@
 .opportunity-card {
   background-color: rgba(255, 255, 255, 0.8);
   border-radius: 12px;
-  padding: 1.5rem;
+  padding: 2rem;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   transition: transform 0.3s, box-shadow 0.3s;
   backdrop-filter: blur(10px);
@@ -301,7 +301,7 @@
 /* Responsive Design */
 @media (max-width: 768px) {
   .opportunities-container {
-    padding: 1.5rem;
+    padding: 2rem;
   }
   
   .opportunities-container h1 {
@@ -309,7 +309,7 @@
   }
   
   .search-section {
-    padding: 1.5rem;
+    padding: 1.75rem;
   }
   
   .opportunities-list {
@@ -319,7 +319,7 @@
 
 @media (max-width: 480px) {
   .opportunities-container {
-    padding: 1rem;
+    padding: 1.5rem;
   }
   
   .opportunities-container h1 {
@@ -331,7 +331,7 @@
   }
   
   .search-section {
-    padding: 1rem;
+    padding: 1.5rem;
   }
   
   .filter-group input,
