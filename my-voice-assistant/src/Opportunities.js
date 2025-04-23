@@ -12,7 +12,8 @@ const SAMPLE_OPPORTUNITIES = [
     type: "internship",
     educationLevel: ["college", "undergraduate"],
     field: ["computer science", "software engineering"],
-    description: "Join our team to develop next-generation technologies that change how billions of users connect, explore, and interact with information and one another."
+    description: "Join our team to develop next-generation technologies that change how billions of users connect, explore, and interact with information and one another.",
+    url: "https://careers.google.com/students/"
   },
   {
     id: 2,
@@ -22,7 +23,8 @@ const SAMPLE_OPPORTUNITIES = [
     type: "internship",
     educationLevel: ["college", "undergraduate", "graduate"],
     field: ["data science", "computer science", "statistics"],
-    description: "Work with big data and AI to solve complex problems and improve Microsoft's products and services."
+    description: "Work with big data and AI to solve complex problems and improve Microsoft's products and services.",
+    url: "https://careers.microsoft.com/students/"
   },
   {
     id: 3,
@@ -32,7 +34,8 @@ const SAMPLE_OPPORTUNITIES = [
     type: "internship",
     educationLevel: ["high school"],
     field: ["science", "engineering", "research"],
-    description: "Experience real-world research and engineering projects at NASA's Johnson Space Center."
+    description: "Experience real-world research and engineering projects at NASA's Johnson Space Center.",
+    url: "https://www.nasa.gov/stem/highschool/student-pathways/"
   },
   {
     id: 4,
@@ -42,7 +45,8 @@ const SAMPLE_OPPORTUNITIES = [
     type: "internship",
     educationLevel: ["college", "undergraduate"],
     field: ["marketing", "business", "communications"],
-    description: "Assist in developing and implementing marketing strategies for Nike's latest products."
+    description: "Assist in developing and implementing marketing strategies for Nike's latest products.",
+    url: "https://jobs.nike.com/internships"
   },
   {
     id: 5,
@@ -52,7 +56,8 @@ const SAMPLE_OPPORTUNITIES = [
     type: "job",
     educationLevel: ["college", "undergraduate", "bootcamp"],
     field: ["web development", "software engineering"],
-    description: "Join our web development team to create and maintain features for Spotify's web application."
+    description: "Join our web development team to create and maintain features for Spotify's web application.",
+    url: "https://www.spotifyjobs.com/students/"
   },
   {
     id: 6,
@@ -62,7 +67,8 @@ const SAMPLE_OPPORTUNITIES = [
     type: "internship",
     educationLevel: ["high school"],
     field: ["IT", "computer science"],
-    description: "Gain hands-on experience in IT support and troubleshooting while still in high school."
+    description: "Gain hands-on experience in IT support and troubleshooting while still in high school.",
+    url: "https://www.indeed.com/q-High-School-Internship-jobs.html"
   },
   {
     id: 7,
@@ -72,7 +78,8 @@ const SAMPLE_OPPORTUNITIES = [
     type: "internship",
     educationLevel: ["college", "undergraduate", "graduate"],
     field: ["finance", "accounting", "business"],
-    description: "Work alongside financial professionals and gain experience in financial analysis and research."
+    description: "Work alongside financial professionals and gain experience in financial analysis and research.",
+    url: "https://careers.jpmorgan.com/us/en/students/programs"
   },
   {
     id: 8,
@@ -82,7 +89,96 @@ const SAMPLE_OPPORTUNITIES = [
     type: "job",
     educationLevel: ["college", "undergraduate", "graduate"],
     field: ["research", "science", "biology"],
-    description: "Assist professors with cutting-edge research projects in various scientific fields."
+    description: "Assist professors with cutting-edge research projects in various scientific fields.",
+    url: "https://careers.stanford.edu/students/"
+  },
+  {
+    id: 9,
+    title: "High School Engineering Internship",
+    company: "Boeing",
+    location: "Seattle, WA",
+    type: "internship",
+    educationLevel: ["high school"],
+    field: ["engineering", "aviation", "manufacturing"],
+    description: "Learn about aerospace engineering and manufacturing processes from industry professionals.",
+    url: "https://jobs.boeing.com/internships"
+  },
+  {
+    id: 10,
+    title: "High School Lab Assistant",
+    company: "National Institutes of Health",
+    location: "Bethesda, MD",
+    type: "internship",
+    educationLevel: ["high school"],
+    field: ["science", "biology", "research"],
+    description: "Work alongside scientists in a lab environment and assist with biomedical research projects.",
+    url: "https://www.training.nih.gov/programs/high_school_summer"
+  },
+  {
+    id: 11,
+    title: "Technology Intern for High School Students",
+    company: "IBM",
+    location: "Multiple Locations",
+    type: "internship",
+    educationLevel: ["high school"],
+    field: ["computer science", "technology", "IT"],
+    description: "Gain exposure to cutting-edge technology and contribute to real projects at IBM.",
+    url: "https://www.ibm.com/us-en/employment/entrylevel/"
+  },
+  {
+    id: 12,
+    title: "Environmental Science Internship",
+    company: "Environmental Protection Agency",
+    location: "Washington, DC",
+    type: "internship",
+    educationLevel: ["high school", "college"],
+    field: ["environmental science", "research", "science"],
+    description: "Participate in environmental research and conservation projects with government scientists.",
+    url: "https://www.epa.gov/careers/student-internships"
+  },
+  {
+    id: 13,
+    title: "High School Business Apprenticeship",
+    company: "Bank of America",
+    location: "Charlotte, NC",
+    type: "internship",
+    educationLevel: ["high school"],
+    field: ["business", "finance", "economics"],
+    description: "Learn about banking, finance, and business operations through hands-on experience.",
+    url: "https://careers.bankofamerica.com/en-us/students-and-graduates"
+  },
+  {
+    id: 14,
+    title: "Journalism Intern",
+    company: "Local Newspaper",
+    location: "Various Locations",
+    type: "internship",
+    educationLevel: ["high school", "college"],
+    field: ["journalism", "writing", "communications"],
+    description: "Develop writing skills by contributing articles and learning about news reporting.",
+    url: "https://www.journalismjobs.com/internships"
+  },
+  {
+    id: 15,
+    title: "Healthcare Volunteer Program",
+    company: "Children's Hospital",
+    location: "Boston, MA",
+    type: "internship",
+    educationLevel: ["high school"],
+    field: ["healthcare", "medicine", "volunteer"],
+    description: "Volunteer in a hospital setting to gain exposure to healthcare careers and help patients.",
+    url: "https://www.childrenshospital.org/workforce-development/internship-opportunities"
+  },
+  {
+    id: 16,
+    title: "Robotics Engineering Intern",
+    company: "Boston Dynamics",
+    location: "Waltham, MA",
+    type: "internship",
+    educationLevel: ["high school", "college"],
+    field: ["robotics", "engineering", "programming"],
+    description: "Work with cutting-edge robotics technology and learn about mechanical and software engineering.",
+    url: "https://www.bostondynamics.com/careers"
   }
 ];
 
@@ -141,21 +237,27 @@ function Opportunities() {
     setShowResults(true);
   };
   
+  // Function to handle Apply button click
+  const handleApply = (url) => {
+    window.open(url, '_blank');
+  };
+  
   return (
     <div className="opportunities-page">
       <div className="background-square"></div>
       
-      {/* Navigation Bar - same as main app for consistency */}
+      {/* Navigation Bar */}
       <nav className="navbar">
-        <div className="navbar-brand">Interview AI</div>
+        <div className="navbar-brand">🧠 Forge Future</div>
         <div className="navbar-links">
-          <Link to="/" className="nav-link">Home</Link>
+          <Link to="/essay-aid" className="nav-link">College Essay Aid</Link>
           <Link to="/opportunities" className="nav-link active">Internship/Job Opportunities</Link>
+          <Link to="/" className="nav-link">Interview AI</Link>
         </div>
       </nav>
       
       <div className="opportunities-container">
-        <h1>Find Internships & Job Opportunities</h1>
+        <h1 style={{ color: '#7e57c2' }}>🧠 Find Internships & Job Opportunities</h1>
         <p className="subtitle">Discover opportunities that match your location, education level, and interests</p>
         
         <div className="search-section">
@@ -238,7 +340,12 @@ function Opportunities() {
                         </span>
                       ))}
                     </div>
-                    <button className="apply-button">Apply Now</button>
+                    <button 
+                      className="apply-button"
+                      onClick={() => handleApply(opportunity.url)}
+                    >
+                      Apply Now
+                    </button>
                   </div>
                 ))}
               </div>

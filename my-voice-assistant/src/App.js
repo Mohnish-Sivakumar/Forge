@@ -71,13 +71,10 @@ console.log('Using API URL:', API_BASE_URL);
 // Voice options for Speechify
 const VOICE_OPTIONS = [
   { id: 'belinda', name: 'Belinda (Default)' },
-  { id: 'matthew', name: 'Matthew (Male)' },
-  { id: 'aria', name: 'Aria (Female 1)' },
-  { id: 'ryan', name: 'Ryan (Male 2)' },
-  { id: 'joseph', name: 'Joseph (Professional)' },
-  { id: 'tom', name: 'Tom (British)' },
-  { id: 'henry', name: 'Henry (British Male)' },
-  { id: 'jane', name: 'Jane (Female 2)' }
+  { id: 'nick', name: 'Nick (Male)' },
+  { id: 'kim', name: 'Kim (Female)' },
+  { id: 'rohit', name: 'Rohit (Male)' },
+  { id: 'rosemary', name: 'Rosemary (Female)' }
 ];
 
 function App() {
@@ -1089,51 +1086,67 @@ function App() {
       
       {/* Navigation Bar */}
       <nav className="navbar">
-        <div className="navbar-brand">Interview AI</div>
+        <div className="navbar-brand">🧠 Forge Future</div>
         <div className="navbar-links">
-          <Link to="/" className="nav-link active">Home</Link>
+          <Link to="/essay-aid" className="nav-link">College Essay Aid</Link>
           <Link to="/opportunities" className="nav-link">Internship/Job Opportunities</Link>
-        </div>
+          <Link to="/" className="nav-link active">Interview AI</Link>
+      </div>
       </nav>
       
-      <div className="header">
-        <h1>Interview AI</h1>
-        <p>Enhance your interview skills with real-time feedback and practice.</p>
-      </div>
       <div className="container">
+        <div className="header">
+          <h1 style={{ color: '#7e57c2' }}>Interview AI</h1>
+          <p>Enhance your interview skills with real-time feedback from AI</p>
+        </div>
         <div className={`blob ${speaking ? 'speaking' : ''}`}>
           <div className="blob-inner">
             {/* AI response text removed as requested */}
           </div>
         </div>
         
-        {/* Voice options */}
+        {/* Display voice options and start button */}
         <div className="voice-options">
+          <div className="voice-selector">
+            <select
+              value={selectedVoice}
+              onChange={(e) => setSelectedVoice(e.target.value)}
+              disabled={listening || speaking || isWaiting}
+            >
+              {VOICE_OPTIONS.map(voice => (
+                <option key={voice.id} value={voice.id}>
+                  {voice.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          
           <label>
             <input
               type="checkbox"
               checked={useVoiceApi}
               onChange={() => setUseVoiceApi(!useVoiceApi)}
-              disabled={speaking || isWaiting}
+              disabled={listening || speaking || isWaiting}
             />
-            Use enhanced voice
+            Use Voice Output
           </label>
-          
-          {useVoiceApi && (
-            <div className="voice-selector">
-              <select 
-                value={selectedVoice} 
-                onChange={(e) => setSelectedVoice(e.target.value)}
-                disabled={speaking || isWaiting}
-              >
-                {VOICE_OPTIONS.map(voice => (
-                  <option key={voice.id} value={voice.id}>{voice.name}</option>
-                ))}
-              </select>
-            </div>
-          )}
         </div>
-        
+
+        {/* Move Start Interview button here - right after voice options */}
+        <button 
+          className="start-interview-button"
+          onClick={!interviewComplete ? startNewInterview : resetInterview}
+          disabled={listening || speaking || isWaiting}
+        >
+          {interviewComplete ? (
+            <>
+              <span className="restart-icon">↺</span> Restart Interview
+            </>
+          ) : (
+            'Start Interview'
+          )}
+        </button>
+
         {/* Only show mic button if the interview has started */}
         {conversationHistory.length > 0 && (
           <button 
@@ -1158,16 +1171,6 @@ function App() {
            processingAudio ? 'Processing...' : 
            conversationHistory.length === 0 ? 'Click to start interview' : 'Click to speak'}
         </div>
-        
-        {/* Start interview button (shown only initially) */}
-        {conversationHistory.length === 0 && !listening && !speaking && !isWaiting && !processingAudio && (
-          <button 
-            className="start-interview-button"
-            onClick={startNewInterview}
-          >
-            Start Interview
-          </button>
-        )}
         
         {/* Display error message if present */}
         {error && (

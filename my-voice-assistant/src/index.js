@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import './index.css';
 import App from './App';
 import Opportunities from './Opportunities';
+import CollegeEssayAid from './CollegeEssayAid';
 import reportWebVitals from './reportWebVitals';
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
@@ -13,6 +14,7 @@ root.render(
       <Routes>
         <Route path="/" element={<App />} />
         <Route path="/opportunities" element={<Opportunities />} />
+        <Route path="/essay-aid" element={<CollegeEssayAid />} />
       </Routes>
     </BrowserRouter>
   </React.StrictMode>

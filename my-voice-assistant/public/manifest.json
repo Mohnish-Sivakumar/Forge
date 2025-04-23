@@ -1,6 +1,6 @@
 {
-  "short_name": "Interview AI",
-  "name": "Interview AI - Practice your interview skills",
+  "short_name": "ForgeFuture",
+  "name": "ForgeFuture - Build your future success",
   "icons": [
     {
       "src": "favicon.ico",
@@ -20,6 +20,6 @@
   ],
   "start_url": "/",
   "display": "standalone",
-  "theme_color": "#000000",
+  "theme_color": "#7e57c2",
   "background_color": "#ffffff"
 }

@@ -1,3 +1,26 @@
+/* Import Poppins font */
+body {
+  font-family: 'Poppins', sans-serif;
+  margin: 0;
+  padding: 0;
+}
+
+/* Poppins font classes */
+.poppins-regular {
+  font-family: 'Poppins', sans-serif;
+  font-weight: 400;
+}
+
+.poppins-medium {
+  font-family: 'Poppins', sans-serif;
+  font-weight: 500;
+}
+
+.poppins-semibold {
+  font-family: 'Poppins', sans-serif;
+  font-weight: 600;
+}
+
 :root {
   --secondary-glow: conic-gradient(
     from 10deg at 50% 50%,
@@ -75,8 +98,8 @@
 .header {
   text-align: center;
   margin-bottom: 2rem;
-  transform: translateY(-20%);
-  margin-top: 4rem;
+  transform: translateY(-10%);
+  margin-top: 8rem;
 }
 
 .header h1 {
@@ -94,10 +117,15 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2rem;
+  gap: 1.5rem;
   justify-content: center;
   height: 100%;
-  transform: translateY(-10%);
+  transform: translateY(-15%);
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+  box-sizing: border-box;
 }
 
 .blob {
@@ -112,6 +140,7 @@
   display: flex;
   justify-content: center;
   align-items: center;
+  margin-top: -60px;
 }
 
 .blob.speaking {
@@ -184,7 +213,7 @@
   font-size: 1rem;
   color: #666;
   z-index: 1;
-  margin-top: 10px;
+  margin-top: 15px;
 }
 
 .waiting-indicator {
@@ -293,8 +322,8 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  margin-top: 10px;
-  margin-bottom: 15px;
+  margin-top: -10px;
+  margin-bottom: 10px;
   padding: 10px;
   background-color: rgba(255, 255, 255, 0.2);
   border-radius: 12px;
@@ -441,7 +470,7 @@
 }
 
 .start-interview-button {
-  margin-top: 2rem;
+  margin-top: 1rem;
   padding: 0.75rem 1.5rem;
   background: linear-gradient(145deg, #b39ddb, #7e57c2);
   color: white;
@@ -453,6 +482,7 @@
   transition: transform 0.2s, box-shadow 0.2s;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1), 0 8px 12px rgba(0, 0, 0, 0.1);
   animation: fadeIn 0.5s ease-in-out;
+  font-family: 'Poppins', sans-serif;
 }
 
 .start-interview-button:hover {
@@ -495,37 +525,34 @@
 
 /* Navigation Bar */
 .navbar {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1rem 2rem;
-  background-color: rgba(255, 255, 255, 0.8);
-  backdrop-filter: blur(10px);
+  background-color: #fff;
+  padding: 10px 20px;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-  z-index: 1000;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  width: 100%;
 }
 
 .navbar-brand {
+  font-weight: 700;
   font-size: 1.5rem;
-  font-weight: bold;
-  color: #7e57c2;
+  color: #5e35b1;
 }
 
 .navbar-links {
   display: flex;
-  gap: 1.5rem;
+  gap: 20px;
 }
 
 .nav-link {
   color: #555;
   text-decoration: none;
-  font-weight: 500;
-  padding: 0.5rem 0;
   position: relative;
+  font-weight: 500;
   transition: color 0.3s;
 }
 
@@ -534,34 +561,82 @@
 }
 
 .nav-link.active {
-  color: #7e57c2;
+  color: #5e35b1;
 }
 
 .nav-link.active::after {
   content: '';
   position: absolute;
-  bottom: 0;
+  bottom: -6px;
   left: 0;
   width: 100%;
-  height: 2px;
-  background-color: #7e57c2;
+  height: 3px;
+  background-color: #5e35b1;
+  border-radius: 2px;
 }
 
+/* Make dashboard responsive */
+.container {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+  box-sizing: border-box;
+}
+
+/* Responsive adjustments for the navbar and container */
 @media (max-width: 768px) {
   .navbar {
-    padding: 1rem;
+    padding: 10px 15px;
+    flex-direction: column;
+    align-items: flex-start;
   }
   
+  .navbar-brand {
+    margin-bottom: 10px;
+    font-size: 1.3rem;
+  }
+  
+  .navbar-links {
+    width: 100%;
+    overflow-x: auto;
+    padding-bottom: 5px;
+    justify-content: flex-start;
+  }
+  
+  .nav-link {
+    white-space: nowrap;
+    font-size: 0.9rem;
+  }
+  
+  .container {
+    padding: 15px;
+  }
+}
+
+@media (max-width: 480px) {
   .navbar-brand {
     font-size: 1.2rem;
   }
   
   .navbar-links {
-    gap: 1rem;
+    gap: 15px;
   }
   
   .nav-link {
-    font-size: 0.9rem;
+    font-size: 0.85rem;
+  }
+  
+  .container {
+    padding: 10px;
+  }
+  
+  h1 {
+    font-size: 1.8rem;
+  }
+  
+  p {
+    font-size: 0.95rem;
   }
 }
 
